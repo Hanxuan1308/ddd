@@ -1,0 +1,361 @@
+/* ============================================================
+   脑力训练场 · NeuroArena
+   全局样式 — 深色现代主题，响应式，支持触屏
+   ============================================================ */
+
+:root {
+  --bg: #0f1220;
+  --bg-soft: #161a2e;
+  --panel: #1b2038;
+  --panel-2: #222847;
+  --line: #2c3355;
+  --text: #eef1ff;
+  --muted: #9aa3c7;
+  --muted-2: #6f78a0;
+
+  /* 每个技能的主题色 */
+  --reason: #8b7dff;   /* 推理 · 紫 */
+  --reason-2: #5b46ff;
+  --logic: #2fd39a;    /* 思维 · 绿 */
+  --logic-2: #17a877;
+  --reaction: #ffb020; /* 反应 · 橙 */
+  --reaction-2: #ff7a1a;
+  --spatial: #40c4ff;  /* 维度 · 蓝 */
+  --spatial-2: #2b8bff;
+
+  --good: #35d07f;
+  --bad: #ff5d6c;
+  --warn: #ffc857;
+
+  --radius: 18px;
+  --radius-sm: 12px;
+  --shadow: 0 18px 45px rgba(0, 0, 0, .45);
+  --ease: cubic-bezier(.22, .61, .36, 1);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC",
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: radial-gradient(1200px 800px at 15% -10%, #1a2040 0%, var(--bg) 55%),
+              radial-gradient(900px 700px at 110% 10%, #171a33 0%, transparent 60%),
+              var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+}
+
+/* 背景光晕 */
+.bg-orbs { position: fixed; inset: 0; z-index: 0; pointer-events: none; filter: blur(60px); opacity: .5; }
+.orb { position: absolute; border-radius: 50%; }
+.orb-1 { width: 340px; height: 340px; top: -80px; left: -60px; background: #4b3bff; opacity: .35; }
+.orb-2 { width: 300px; height: 300px; bottom: -100px; right: -60px; background: #17a877; opacity: .28; }
+.orb-3 { width: 260px; height: 260px; top: 40%; left: 60%; background: #2b8bff; opacity: .22; }
+
+/* ---------- 头部 ---------- */
+.app-header {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px clamp(16px, 4vw, 40px);
+  gap: 12px;
+}
+.brand { display: flex; align-items: center; gap: 12px; cursor: pointer; border-radius: 14px; padding: 6px 8px; outline: none; }
+.brand:focus-visible { box-shadow: 0 0 0 2px var(--reason-2); }
+.brand-logo { font-size: 30px; line-height: 1; filter: drop-shadow(0 4px 10px rgba(91, 70, 255, .5)); }
+.brand-text { display: flex; flex-direction: column; }
+.brand-text strong { font-size: 18px; letter-spacing: .5px; }
+.brand-text small { color: var(--muted); font-size: 11px; letter-spacing: .5px; }
+
+.icon-btn {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--text);
+  width: 42px; height: 42px;
+  border-radius: 12px;
+  font-size: 18px;
+  cursor: pointer;
+  transition: transform .15s var(--ease), background .2s;
+}
+.icon-btn:hover { background: var(--panel-2); transform: translateY(-1px); }
+.icon-btn:active { transform: translateY(0) scale(.96); }
+.icon-btn.muted { opacity: .55; }
+
+/* ---------- 主区域 ---------- */
+.app-main {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 8px clamp(16px, 4vw, 40px) 32px;
+}
+
+.app-footer {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  color: var(--muted-2);
+  font-size: 12px;
+  padding: 14px;
+}
+
+/* ---------- 首页卡片 ---------- */
+.home-intro { text-align: center; margin: 6px 0 22px; }
+.home-intro h1 { font-size: clamp(24px, 5vw, 34px); margin: 0 0 8px; }
+.home-intro p { color: var(--muted); margin: 0; font-size: 14px; }
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+@media (max-width: 560px) { .card-grid { grid-template-columns: 1fr; } }
+
+.game-card {
+  position: relative;
+  text-align: left;
+  background: linear-gradient(160deg, var(--panel) 0%, var(--bg-soft) 100%);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform .2s var(--ease), border-color .2s, box-shadow .25s;
+  color: var(--text);
+  font: inherit;
+}
+.game-card::before {
+  content: "";
+  position: absolute; inset: 0;
+  background: radial-gradient(280px 160px at 100% 0%, var(--accent, #5b46ff) 0%, transparent 70%);
+  opacity: .16;
+  transition: opacity .25s;
+}
+.game-card:hover { transform: translateY(-4px); border-color: var(--accent, #5b46ff); box-shadow: var(--shadow); }
+.game-card:hover::before { opacity: .28; }
+.game-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.gc-top { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.gc-icon {
+  width: 54px; height: 54px; border-radius: 14px;
+  display: grid; place-items: center;
+  font-size: 28px;
+  background: linear-gradient(150deg, var(--accent) 0%, var(--accent-2) 100%);
+  box-shadow: 0 10px 24px -8px var(--accent);
+}
+.gc-title { display: flex; flex-direction: column; }
+.gc-title b { font-size: 19px; }
+.gc-title span { font-size: 12px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; }
+.gc-desc { color: var(--muted); font-size: 13.5px; line-height: 1.6; margin: 0 0 14px; min-height: 44px; }
+.gc-foot { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; }
+.gc-best { color: var(--muted); }
+.gc-best b { color: var(--accent); font-size: 15px; }
+.gc-play { color: var(--accent); font-weight: 700; display: inline-flex; align-items: center; gap: 4px; }
+
+/* ---------- 通用游戏界面 ---------- */
+.screen { animation: fade .35s var(--ease); }
+@keyframes fade { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+.game-head {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 14px;
+}
+.back-btn {
+  background: var(--panel); border: 1px solid var(--line); color: var(--text);
+  border-radius: 12px; padding: 9px 14px; cursor: pointer; font-size: 14px;
+  display: inline-flex; align-items: center; gap: 6px; transition: background .2s, transform .15s;
+}
+.back-btn:hover { background: var(--panel-2); transform: translateX(-2px); }
+.game-head h2 { margin: 0; font-size: 20px; display: flex; align-items: center; gap: 8px; }
+.game-head .spacer { flex: 1; }
+
+.stat-pills { display: flex; gap: 8px; flex-wrap: wrap; }
+.pill {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 999px; padding: 6px 12px; font-size: 13px; color: var(--muted);
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.pill b { color: var(--text); font-variant-numeric: tabular-nums; }
+.pill.accent b { color: var(--accent); }
+
+.panel {
+  background: linear-gradient(160deg, var(--panel) 0%, var(--bg-soft) 100%);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: clamp(16px, 3vw, 26px);
+}
+.hint { color: var(--muted); font-size: 13.5px; line-height: 1.65; margin: 0 0 16px; }
+.hint b { color: var(--text); }
+
+.btn {
+  border: none; border-radius: 12px; padding: 12px 20px; cursor: pointer;
+  font-size: 15px; font-weight: 600; color: #fff;
+  background: linear-gradient(150deg, var(--accent) 0%, var(--accent-2) 100%);
+  box-shadow: 0 10px 22px -10px var(--accent);
+  transition: transform .15s var(--ease), filter .2s, opacity .2s;
+}
+.btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+.btn:active { transform: translateY(0) scale(.98); }
+.btn:disabled { opacity: .45; cursor: not-allowed; filter: none; transform: none; }
+.btn.ghost { background: var(--panel-2); box-shadow: none; color: var(--text); border: 1px solid var(--line); }
+
+.center { text-align: center; }
+.mt { margin-top: 16px; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.row.center { justify-content: center; }
+
+.toast {
+  position: fixed; left: 50%; bottom: 34px; transform: translateX(-50%) translateY(20px);
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+  padding: 12px 20px; border-radius: 12px; font-size: 14px; z-index: 50;
+  opacity: 0; pointer-events: none; transition: opacity .3s, transform .3s; box-shadow: var(--shadow);
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ============================================================
+   1) 推理 · 密码破译 (Mastermind)
+   ============================================================ */
+.mm-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.mm-board { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.mm-row {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--bg-soft); border: 1px solid var(--line);
+  border-radius: 14px; padding: 8px 12px;
+}
+.mm-row.current { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.mm-idx { width: 22px; text-align: center; color: var(--muted-2); font-size: 13px; font-variant-numeric: tabular-nums; }
+.mm-pegs { display: flex; gap: 8px; }
+.peg {
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,.14);
+  background: var(--panel-2);
+  display: grid; place-items: center; cursor: default;
+  transition: transform .15s;
+}
+.mm-row.current .peg { cursor: pointer; }
+.mm-row.current .peg:hover { transform: scale(1.08); }
+.peg.sel { box-shadow: 0 0 0 3px rgba(255,255,255,.15); }
+.mm-feedback { margin-left: auto; display: grid; grid-template-columns: repeat(2, 12px); grid-auto-rows: 12px; gap: 3px; }
+.fb-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--panel-2); border: 1px solid var(--line); }
+.fb-dot.exact { background: #fff; border-color: #fff; }
+.fb-dot.color { background: transparent; border-color: #fff; }
+
+.palette { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 14px; }
+.swatch {
+  width: 44px; height: 44px; border-radius: 12px; cursor: pointer; border: 2px solid rgba(255,255,255,.18);
+  transition: transform .12s, box-shadow .2s;
+}
+.swatch:hover { transform: translateY(-2px) scale(1.05); }
+.swatch.active { box-shadow: 0 0 0 3px var(--text); transform: translateY(-2px); }
+
+.color-0 { background: #ff5d6c; } .color-1 { background: #ffb020; }
+.color-2 { background: #ffe45e; } .color-3 { background: #2fd39a; }
+.color-4 { background: #40c4ff; } .color-5 { background: #b388ff; }
+.color-empty { background: var(--panel-2); }
+
+/* ============================================================
+   2) 思维 · 数列推理
+   ============================================================ */
+.seq-display {
+  font-size: clamp(24px, 6vw, 40px); font-weight: 800; text-align: center;
+  letter-spacing: 2px; margin: 10px 0 6px; font-variant-numeric: tabular-nums;
+  min-height: 56px; display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap;
+}
+.seq-q { color: var(--accent); }
+.seq-sub { text-align: center; color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+.seq-options { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.seq-opt {
+  background: var(--bg-soft); border: 1.5px solid var(--line); color: var(--text);
+  border-radius: 14px; padding: 18px; font-size: 22px; font-weight: 700; cursor: pointer;
+  font-variant-numeric: tabular-nums; transition: transform .12s, border-color .2s, background .2s;
+}
+.seq-opt:hover { border-color: var(--accent); transform: translateY(-2px); }
+.seq-opt.correct { background: rgba(53, 208, 127, .18); border-color: var(--good); }
+.seq-opt.wrong { background: rgba(255, 93, 108, .16); border-color: var(--bad); }
+.seq-opt:disabled { cursor: default; }
+
+.timebar { height: 8px; background: var(--panel-2); border-radius: 999px; overflow: hidden; margin-bottom: 18px; }
+.timebar > i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .1s linear; }
+
+/* ============================================================
+   3) 反应 · 极速反应
+   ============================================================ */
+.react-arena {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  max-height: 62vh;
+  background: radial-gradient(circle at 50% 40%, #12162b 0%, #0c0f1e 100%);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  user-select: none;
+  touch-action: manipulation;
+}
+.react-arena.wait { cursor: pointer; }
+.react-center {
+  position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 20px;
+}
+.react-center h3 { margin: 0 0 6px; font-size: clamp(20px, 5vw, 30px); }
+.react-center p { margin: 4px 0; color: var(--muted); font-size: 14px; }
+.react-big { font-size: clamp(34px, 9vw, 64px); font-weight: 800; font-variant-numeric: tabular-nums; }
+.react-arena.state-ready { background: radial-gradient(circle at 50% 45%, #3a2a12 0%, #241608 100%); }
+.react-arena.state-go { background: radial-gradient(circle at 50% 45%, #123821 0%, #0a2716 100%); }
+.react-arena.state-early { background: radial-gradient(circle at 50% 45%, #3a1420 0%, #260a12 100%); }
+
+.target {
+  position: absolute;
+  width: 66px; height: 66px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff6d8, var(--reaction) 55%, var(--reaction-2));
+  box-shadow: 0 0 0 6px rgba(255, 176, 32, .18), 0 8px 30px rgba(255, 122, 26, .4);
+  display: grid; place-items: center; cursor: pointer;
+  transform: translate(-50%, -50%) scale(0);
+  animation: pop .18s var(--ease) forwards;
+}
+@keyframes pop { to { transform: translate(-50%, -50%) scale(1); } }
+.target::after { content: "⚡"; font-size: 26px; }
+
+/* ============================================================
+   4) 维度 · 空间旋转
+   ============================================================ */
+.sp-wrap { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.sp-ref { text-align: center; }
+.sp-ref .label { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+.sp-canvas {
+  background: var(--bg-soft); border: 1.5px solid var(--line); border-radius: 16px;
+  display: block;
+}
+.sp-ref .sp-canvas { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.sp-options { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; width: 100%; max-width: 420px; }
+.sp-option {
+  padding: 8px; border-radius: 16px; background: transparent; border: none; cursor: pointer;
+  display: grid; place-items: center; transition: transform .12s;
+}
+.sp-option:hover .sp-canvas { border-color: var(--accent); }
+.sp-option:hover { transform: translateY(-2px); }
+.sp-option.correct .sp-canvas { border-color: var(--good); box-shadow: 0 0 0 2px var(--good); }
+.sp-option.wrong .sp-canvas { border-color: var(--bad); box-shadow: 0 0 0 2px var(--bad); }
+.sp-option:disabled { cursor: default; }
+
+/* ---------- 结算 ---------- */
+.result-card { text-align: center; padding: 8px 0; }
+.result-emoji { font-size: 54px; }
+.result-card h3 { font-size: 24px; margin: 8px 0 4px; }
+.result-card .big-num { font-size: 46px; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
+.result-card .sub { color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+.new-best { display: inline-block; background: linear-gradient(150deg, var(--accent), var(--accent-2)); color: #fff; padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: 700; margin-bottom: 12px; animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }

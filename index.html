@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0f1220" />
+  <title>脑力训练场 · NeuroArena</title>
+  <meta name="description" content="推理 · 思维 · 反应 · 维度 四合一大脑训练小游戏" />
+  <link rel="stylesheet" href="assets/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>" />
+</head>
+<body>
+  <div class="bg-orbs" aria-hidden="true">
+    <span class="orb orb-1"></span>
+    <span class="orb orb-2"></span>
+    <span class="orb orb-3"></span>
+  </div>
+
+  <header class="app-header">
+    <div class="brand" id="brand-home" role="button" tabindex="0" title="返回首页">
+      <span class="brand-logo">🧠</span>
+      <span class="brand-text">
+        <strong>脑力训练场</strong>
+        <small>NeuroArena · 推理 · 思维 · 反应 · 维度</small>
+      </span>
+    </div>
+    <button id="sound-toggle" class="icon-btn" title="开/关音效" aria-label="切换音效">🔊</button>
+  </header>
+
+  <main id="app" class="app-main">
+    <!-- 各界面由 app.js 动态渲染 -->
+  </main>
+
+  <footer class="app-footer">
+    <span>用键盘 / 触屏均可游玩 · 成绩自动保存在本地</span>
+  </footer>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>
