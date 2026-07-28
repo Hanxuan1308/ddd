@@ -8,6 +8,14 @@
   <meta name="description" content="推理 · 思维 · 反应 · 维度 四合一大脑训练小游戏" />
   <link rel="stylesheet" href="assets/style.css" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>" />
+  <script>
+    /* 首帧前应用主题，避免闪烁 */
+    try {
+      var _t = localStorage.getItem("na_theme");
+      _t = _t ? JSON.parse(_t) : (window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+      document.documentElement.setAttribute("data-theme", _t);
+    } catch (e) { document.documentElement.setAttribute("data-theme", "dark"); }
+  </script>
 </head>
 <body>
   <div class="bg-orbs" aria-hidden="true">
@@ -24,7 +32,10 @@
         <small>NeuroArena · 推理 · 思维 · 反应 · 维度</small>
       </span>
     </div>
-    <button id="sound-toggle" class="icon-btn" title="开/关音效" aria-label="切换音效">🔊</button>
+    <div class="header-actions">
+      <button id="theme-toggle" class="icon-btn" title="切换深色/浅色" aria-label="切换主题">🌙</button>
+      <button id="sound-toggle" class="icon-btn" title="开/关音效" aria-label="切换音效">🔊</button>
+    </div>
   </header>
 
   <main id="app" class="app-main">

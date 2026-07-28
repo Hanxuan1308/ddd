@@ -29,6 +29,11 @@
   --bad: #ff5d6c;
   --warn: #ffc857;
 
+  --ring: rgba(255, 255, 255, .14);  /* 棋子/色块描边 */
+  --peg-mark: #ffffff;               /* 反馈点标记 */
+  --arena-text: #eef1ff;             /* 反应区固定浅色文字 */
+  --overlay-bg: rgba(15, 18, 32, .82);
+
   --radius: 18px;
   --radius-sm: 12px;
   --shadow: 0 18px 45px rgba(0, 0, 0, .45);
@@ -94,6 +99,7 @@ body {
 .icon-btn:hover { background: var(--panel-2); transform: translateY(-1px); }
 .icon-btn:active { transform: translateY(0) scale(.96); }
 .icon-btn.muted { opacity: .55; }
+.header-actions { display: flex; gap: 10px; }
 
 /* ---------- 主区域 ---------- */
 .app-main {
@@ -243,7 +249,7 @@ body {
 .mm-pegs { display: flex; gap: 8px; }
 .peg {
   width: 34px; height: 34px; border-radius: 50%;
-  border: 2px solid rgba(255,255,255,.14);
+  border: 2px solid var(--ring);
   background: var(--panel-2);
   display: grid; place-items: center; cursor: default;
   transition: transform .15s;
@@ -253,12 +259,12 @@ body {
 .peg.sel { box-shadow: 0 0 0 3px rgba(255,255,255,.15); }
 .mm-feedback { margin-left: auto; display: grid; grid-template-columns: repeat(2, 12px); grid-auto-rows: 12px; gap: 3px; }
 .fb-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--panel-2); border: 1px solid var(--line); }
-.fb-dot.exact { background: #fff; border-color: #fff; }
-.fb-dot.color { background: transparent; border-color: #fff; }
+.fb-dot.exact { background: var(--peg-mark); border-color: var(--peg-mark); }
+.fb-dot.color { background: transparent; border-color: var(--peg-mark); }
 
 .palette { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 14px; }
 .swatch {
-  width: 44px; height: 44px; border-radius: 12px; cursor: pointer; border: 2px solid rgba(255,255,255,.18);
+  width: 44px; height: 44px; border-radius: 12px; cursor: pointer; border: 2px solid var(--ring);
   transition: transform .12s, box-shadow .2s;
 }
 .swatch:hover { transform: translateY(-2px) scale(1.05); }
@@ -312,9 +318,10 @@ body {
 .react-arena.wait { cursor: pointer; }
 .react-center {
   position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 20px;
+  color: var(--arena-text);
 }
 .react-center h3 { margin: 0 0 6px; font-size: clamp(20px, 5vw, 30px); }
-.react-center p { margin: 4px 0; color: var(--muted); font-size: 14px; }
+.react-center p { margin: 4px 0; color: rgba(238, 241, 255, .7); font-size: 14px; }
 .react-big { font-size: clamp(34px, 9vw, 64px); font-weight: 800; font-variant-numeric: tabular-nums; }
 .react-arena.state-ready { background: radial-gradient(circle at 50% 45%, #3a2a12 0%, #241608 100%); }
 .react-arena.state-go { background: radial-gradient(circle at 50% 45%, #123821 0%, #0a2716 100%); }
@@ -412,7 +419,7 @@ body {
 @keyframes shake { 0%,100% { transform: translateX(0); } 20%,60% { transform: translateX(-5px); } 40%,80% { transform: translateX(5px); } }
 .schulte-overlay {
   position: absolute; inset: 0;
-  background: rgba(15, 18, 32, .82);
+  background: var(--overlay-bg);
   backdrop-filter: blur(3px);
   border-radius: var(--radius);
   display: grid; place-items: center; text-align: center;
@@ -420,3 +427,32 @@ body {
 }
 .schulte-overlay h3 { margin: 0 0 6px; font-size: 22px; }
 .schulte-overlay p { margin: 0 0 4px; color: var(--muted); font-size: 14px; }
+
+/* ============================================================
+   浅色主题（由 <html data-theme="light"> 驱动）
+   ============================================================ */
+:root[data-theme="light"] {
+  --bg: #eef1f8;
+  --bg-soft: #ffffff;
+  --panel: #ffffff;
+  --panel-2: #eef1f8;
+  --line: #dbe0ee;
+  --text: #1b2138;
+  --muted: #5c6486;
+  --muted-2: #8991af;
+
+  --ring: rgba(20, 26, 54, .16);
+  --peg-mark: #1b2138;
+  --shadow: 0 18px 45px rgba(38, 50, 90, .16);
+  /* 反应区与舒尔特开始遮罩保持深色，文字用固定浅色 —— 变量维持默认深色值 */
+}
+:root[data-theme="light"] body {
+  background: radial-gradient(1200px 800px at 15% -10%, #e6ecfb 0%, var(--bg) 55%),
+              radial-gradient(900px 700px at 110% 10%, #eaf0ff 0%, transparent 60%),
+              var(--bg);
+}
+:root[data-theme="light"] .bg-orbs { opacity: .22; }
+:root[data-theme="light"] .brand-logo { filter: drop-shadow(0 4px 10px rgba(91, 70, 255, .3)); }
+/* 浅色下正误提示底色略加深以保证可读 */
+:root[data-theme="light"] .seq-opt.correct { background: rgba(23, 168, 119, .16); }
+:root[data-theme="light"] .seq-opt.wrong { background: rgba(255, 93, 108, .14); }

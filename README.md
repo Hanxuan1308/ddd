@@ -24,38 +24,42 @@
 | 空间旋转 | 4 连块 | 5 连块 | 6 连块 |
 | 舒尔特方格 | 3×3 | 4×4 | 5×5 |
 
-## 🚀 运行方式
+## 🚀 如何使用（无需构建、无需安装依赖）
 
-无需构建、无需安装任何依赖：
+**方式一 · 单文件，最省事** —— 下载仓库里的 [`standalone.html`](standalone.html)（已把 HTML/CSS/JS 全部内联成一个文件），双击用浏览器打开即可，手机上用浏览器打开同样能玩，可完全离线。
+
+**方式二 · 克隆后打开**
 
 ```bash
-# 方式一：直接用浏览器打开
+git clone <repo-url> && cd ddd
+# 直接双击 index.html，或
 open index.html          # macOS
-# 或双击 index.html
-
-# 方式二：起一个本地静态服务器（可选）
-python3 -m http.server 8000
-# 然后访问 http://localhost:8000
+python3 -m http.server 8000   # 或起个本地服务器，访问 http://localhost:8000
 ```
 
-也可直接部署到 GitHub Pages / 任意静态托管。
+**方式三 · 部署到 GitHub Pages**（得到一个可分享的网址）
+仓库 → Settings → Pages → Source 选择该分支与根目录，保存后即可通过 `https://<用户名>.github.io/<仓库名>/` 访问。
+
+> `standalone.html` 由 `node scripts/build-standalone.mjs` 从源文件自动生成，改动源码后重新运行即可同步。
 
 ## ✨ 特性
 
 - **纯原生**：仅 HTML + CSS + 原生 JavaScript，无任何第三方库或网络请求，可完全离线运行。
 - **响应式**：桌面与移动端自适应，支持鼠标点击与触屏。
-- **本地存档**：每个游戏的最佳成绩通过 `localStorage` 保存，首页实时展示。
+- **本地存档**：每个游戏的最佳成绩通过 `localStorage` 保存（按难度分别记录），首页实时展示。
 - **音效**：使用 Web Audio 即时合成，无需音频素材；右上角可一键开关。
-- **深色主题**：现代渐变 UI，每个技能有独立主题色。
+- **深色 / 浅色主题**：右上角一键切换，跟随系统偏好，选择本地记忆；整套配色由 CSS 变量驱动，每个技能有独立主题色。
 
 ## 📁 目录结构
 
 ```
 .
-├── index.html          # 页面外壳
+├── index.html                    # 页面外壳（含首帧主题、防闪烁）
 ├── assets/
-│   ├── style.css       # 全部样式（深色主题、响应式）
-│   └── app.js          # 全部逻辑（路由 + 难度系统 + 五个游戏）
+│   ├── style.css                 # 全部样式（深/浅双主题、响应式）
+│   └── app.js                    # 全部逻辑（路由 + 主题 + 难度系统 + 五个游戏）
+├── scripts/build-standalone.mjs  # 内联打包脚本
+├── standalone.html               # 单文件版（自动生成，便于下载分发）
 └── README.md
 ```
 
