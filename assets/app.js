@@ -35,6 +35,7 @@
 
   const rand = (n) => Math.floor(Math.random() * n);
   const pick = (arr) => arr[rand(arr.length)];
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const shuffle = (arr) => {
     const a = arr.slice();
     for (let i = a.length - 1; i > 0; i--) { const j = rand(i + 1); [a[i], a[j]] = [a[j], a[i]]; }
@@ -96,7 +97,7 @@
   const root = document.documentElement;
   const Theme = {
     get() { return root.getAttribute("data-theme") === "light" ? "light" : "dark"; },
-    set(t) { root.setAttribute("data-theme", t); Store.set("theme", t); refreshThemeBtn(); },
+    set(t) { root.setAttribute("data-theme", t); Store.set("theme", t); refreshThemeBtn(); themeRedraws.forEach((fn) => { try { fn(); } catch (_) {} }); },
     toggle() { this.set(this.get() === "dark" ? "light" : "dark"); },
   };
   const themeBtn = document.getElementById("theme-toggle");
@@ -119,11 +120,13 @@
 
   /* -------------------- 路由 -------------------- */
   let currentGame = null;
+  let themeRedraws = []; // 主题切换时需要重绘的回调（如雷达图 canvas），每次导航清空
   function leaveGame() { if (currentGame && currentGame.teardown) { try { currentGame.teardown(); } catch (_) {} } currentGame = null; }
-  function mount(node) { leaveGame(); app.innerHTML = ""; app.appendChild(node); window.scrollTo(0, 0); }
+  function mount(node) { leaveGame(); themeRedraws = []; app.innerHTML = ""; app.appendChild(node); window.scrollTo(0, 0); }
   function goHome() { mount(renderHome()); }
   document.getElementById("brand-home").addEventListener("click", goHome);
   document.getElementById("brand-home").addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") goHome(); });
+  document.getElementById("stats-btn").addEventListener("click", () => { Sound.click(); showStats(); });
 
   const accentVars = (name) => ({ "--accent": `var(--${name})`, "--accent-2": `var(--${name}-2)` });
 
@@ -622,6 +625,111 @@
     }
     mount(shell.section);
     currentGame = { teardown() { clearInterval(tickTimer); } };
+  }
+
+  /* ==========================================================
+     能力总览 · 五维雷达图 + 成绩明细
+     ========================================================== */
+  // 把各模块最佳成绩折算成 0–100 的“能力值”（相对参考，越大越强）
+  const ABILITY = {
+    reason: (v) => clamp(Math.round(110 - v * 10), 5, 100),      // 步数越少越强
+    logic: (v) => clamp(Math.round(v / 2), 0, 100),             // 得分越高越强
+    reaction: (v) => clamp(Math.round((520 - v) / 2.7), 0, 100), // 毫秒越小越强
+    spatial: (v) => clamp(Math.round(v / 2), 0, 100),
+    schulte: (v) => clamp(Math.round((16000 - v) / 140), 0, 100), // 毫秒越小越强
+  };
+  function bestAcross(g) { // 取跨难度的最佳（对“越小越好”取最小，否则取最大）
+    const vals = DIFFS.map((d) => getBest(g.id, d.id)).filter((v) => v != null);
+    if (!vals.length) return null;
+    return g.lowerBetter ? Math.min(...vals) : Math.max(...vals);
+  }
+  function rankOf(s) {
+    return s >= 90 ? { t: "大师", e: "🏆" } : s >= 75 ? { t: "专家", e: "🌟" }
+      : s >= 55 ? { t: "高手", e: "🔥" } : s >= 35 ? { t: "熟练", e: "💪" }
+      : s >= 15 ? { t: "入门", e: "🌱" } : { t: "见习", e: "🐣" };
+  }
+  function hexA(hex, a) {
+    hex = hex.replace("#", "");
+    if (hex.length === 3) hex = hex.split("").map((c) => c + c).join("");
+    const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16);
+    return `rgba(${r},${g},${b},${a})`;
+  }
+  function drawRadar(canvas, data) {
+    const dpr = window.devicePixelRatio || 1;
+    const size = canvas.clientWidth || 320;
+    canvas.width = size * dpr; canvas.height = size * dpr;
+    const ctx = canvas.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, size, size);
+    const cx = size / 2, cy = size / 2, R = size / 2 - 62, n = data.length;
+    const cs = getComputedStyle(document.documentElement);
+    const grid = cs.getPropertyValue("--radar-grid").trim() || "rgba(150,160,200,.22)";
+    const textCol = cs.getPropertyValue("--text").trim() || "#eee";
+    const accent = cs.getPropertyValue("--profile").trim() || "#8b90ff";
+    const ringCol = cs.getPropertyValue("--bg-soft").trim() || "#111";
+    const fam = getComputedStyle(document.body).fontFamily;
+    const ang = (i) => -Math.PI / 2 + i * 2 * Math.PI / n;
+    ctx.lineWidth = 1; ctx.strokeStyle = grid;
+    [20, 40, 60, 80, 100].forEach((lvl) => {
+      ctx.beginPath();
+      for (let i = 0; i < n; i++) { const r = R * lvl / 100, x = cx + Math.cos(ang(i)) * r, y = cy + Math.sin(ang(i)) * r; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+      ctx.closePath(); ctx.stroke();
+    });
+    for (let i = 0; i < n; i++) { ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(ang(i)) * R, cy + Math.sin(ang(i)) * R); ctx.stroke(); }
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) { const r = R * data[i].value / 100, x = cx + Math.cos(ang(i)) * r, y = cy + Math.sin(ang(i)) * r; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+    ctx.closePath(); ctx.fillStyle = hexA(accent, 0.22); ctx.fill(); ctx.strokeStyle = accent; ctx.lineWidth = 2; ctx.stroke();
+    for (let i = 0; i < n; i++) {
+      const r = R * data[i].value / 100, x = cx + Math.cos(ang(i)) * r, y = cy + Math.sin(ang(i)) * r;
+      ctx.beginPath(); ctx.arc(x, y, 4.5, 0, 7); ctx.fillStyle = accent; ctx.fill(); ctx.strokeStyle = ringCol; ctx.lineWidth = 2; ctx.stroke();
+    }
+    ctx.textBaseline = "middle";
+    for (let i = 0; i < n; i++) {
+      const a = ang(i), lx = cx + Math.cos(a) * (R + 16), ly = cy + Math.sin(a) * (R + 16), c = Math.cos(a);
+      ctx.textAlign = Math.abs(c) < 0.35 ? "center" : (c > 0 ? "left" : "right");
+      ctx.font = "600 12.5px " + fam; ctx.fillStyle = textCol; ctx.fillText(data[i].emoji + " " + data[i].label, lx, ly - 8);
+      ctx.font = "800 12.5px " + fam; ctx.fillStyle = accent; ctx.fillText(String(data[i].value), lx, ly + 9);
+    }
+  }
+  function showStats() {
+    const data = GAMES.map((g) => { const raw = bestAcross(g); return { g, raw, value: raw == null ? 0 : ABILITY[g.id](raw) }; });
+    const hasAny = data.some((d) => d.raw != null);
+    const overall = hasAny ? Math.round(data.reduce((s, d) => s + d.value, 0) / data.length) : 0;
+    const rk = rankOf(overall);
+
+    const head = h("div", { class: "game-head" },
+      h("button", { class: "back-btn", onclick: () => { Sound.click(); goHome(); } }, "‹ 返回"),
+      h("h2", null, "📊 能力总览"), h("div", { class: "spacer" }));
+    const panel = h("div", { class: "panel" });
+    const section = h("section", { class: "screen", style: { "--accent": "var(--profile)", "--accent-2": "var(--profile)" } }, head, panel);
+
+    if (!hasAny) {
+      panel.appendChild(h("div", { class: "stats-empty" },
+        h("div", { class: "result-emoji" }, "📊"),
+        h("h3", { style: { margin: "8px 0 6px" } }, "还没有任何成绩"),
+        h("p", { class: "hint", style: { textAlign: "center" } }, "先去玩几局，这里就会生成你的五维能力雷达图和最佳成绩明细。"),
+        h("div", { class: "row center" }, h("button", { class: "btn", onclick: goHome }, "去训练 ▶"))));
+      mount(section); currentGame = { teardown() {} }; return;
+    }
+
+    const canvas = h("canvas", { class: "radar-canvas", role: "img", "aria-label": "五维能力雷达图" });
+    const radarData = data.map((d) => ({ label: d.g.skill, emoji: d.g.icon, value: d.value }));
+    panel.appendChild(h("div", { class: "stats-hero" },
+      canvas,
+      h("div", { class: "stats-score" }, h("div", { class: "num" }, String(overall)), h("div", { class: "rank" }, rk.e + " " + rk.t + " · 综合能力")),
+      h("div", { class: "stats-note" }, "能力值 0–100 为相对参考，取各模块历史最佳（跨难度）折算")));
+
+    const rows = GAMES.map((g) => h("tr", null,
+      h("td", null, h("span", { class: "mod" }, h("span", { class: "i" }, g.icon), g.name)),
+      ...DIFFS.map((d) => { const b = getBest(g.id, d.id); return h("td", null, b == null ? "—" : g.bestLabel(b)); })));
+    panel.appendChild(h("div", { class: "stats-table-wrap" },
+      h("table", { class: "stats-table" },
+        h("thead", null, h("tr", null, h("th", null, "模块"), ...DIFFS.map((d) => h("th", null, d.name)))),
+        h("tbody", null, rows))));
+
+    mount(section);
+    const draw = () => drawRadar(canvas, radarData);
+    draw(); themeRedraws.push(draw);
+    currentGame = { teardown() {} };
   }
 
   /* -------------------- 启动 -------------------- */
