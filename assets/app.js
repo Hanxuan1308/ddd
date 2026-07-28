@@ -1,13 +1,13 @@
 /* ============================================================
    脑力训练场 · NeuroArena
    纯原生 JS · 无依赖 · 直接打开 index.html 即可游玩
-   四个训练模块：推理 / 思维 / 反应 / 维度
+   五个训练模块：推理 / 思维 / 反应 / 维度 / 综合(舒尔特)
+   每个模块支持 简单 / 普通 / 困难 三档难度，成绩分档保存
    ============================================================ */
 (function () {
   "use strict";
 
   /* -------------------- 通用工具 -------------------- */
-  const $ = (sel, root) => (root || document).querySelector(sel);
   const app = document.getElementById("app");
 
   // 迷你 DOM 构建器：h("div", {class:"x", onclick:fn}, child1, child2...)
@@ -40,13 +40,27 @@
     for (let i = a.length - 1; i > 0; i--) { const j = rand(i + 1); [a[i], a[j]] = [a[j], a[i]]; }
     return a;
   };
-  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-  /* -------------------- 本地存储（最佳成绩） -------------------- */
+  /* -------------------- 本地存储 -------------------- */
   const Store = {
     get(key, def) { try { const v = localStorage.getItem("na_" + key); return v == null ? def : JSON.parse(v); } catch (_) { return def; } },
     set(key, val) { try { localStorage.setItem("na_" + key, JSON.stringify(val)); } catch (_) {} },
   };
+
+  /* -------------------- 难度系统 -------------------- */
+  const DIFFS = [{ id: "easy", name: "简单" }, { id: "normal", name: "普通" }, { id: "hard", name: "困难" }];
+  const diffName = (id) => (DIFFS.find((d) => d.id === id) || DIFFS[1]).name;
+  const getDiff = (gameId) => Store.get("diff." + gameId, "normal");
+  const setDiff = (gameId, d) => Store.set("diff." + gameId, d);
+  const bestKey = (gameId, d) => "best." + gameId + "." + d;
+  const getBest = (gameId, d) => Store.get(bestKey(gameId, d), null);
+  // 记录成绩：lowerBetter=true 时越小越好，返回 {isBest, best}
+  function recordBest(gameId, d, value, lowerBetter) {
+    const cur = getBest(gameId, d);
+    const isBest = cur == null || (lowerBetter ? value < cur : value > cur);
+    if (isBest) Store.set(bestKey(gameId, d), value);
+    return { isBest, best: getBest(gameId, d) };
+  }
 
   /* -------------------- 音效（WebAudio，无需素材） -------------------- */
   const Sound = {
@@ -74,85 +88,90 @@
   };
 
   const soundBtn = document.getElementById("sound-toggle");
-  function refreshSoundBtn() {
-    soundBtn.textContent = Sound.on ? "🔊" : "🔈";
-    soundBtn.classList.toggle("muted", !Sound.on);
-  }
-  soundBtn.addEventListener("click", () => {
-    Sound.on = !Sound.on; Store.set("sound", Sound.on); refreshSoundBtn();
-    if (Sound.on) Sound.click();
-  });
+  function refreshSoundBtn() { soundBtn.textContent = Sound.on ? "🔊" : "🔈"; soundBtn.classList.toggle("muted", !Sound.on); }
+  soundBtn.addEventListener("click", () => { Sound.on = !Sound.on; Store.set("sound", Sound.on); refreshSoundBtn(); if (Sound.on) Sound.click(); });
   refreshSoundBtn();
 
   /* -------------------- 轻量提示 toast -------------------- */
   let toastEl, toastTimer;
   function toast(msg) {
     if (!toastEl) { toastEl = h("div", { class: "toast" }); document.body.appendChild(toastEl); }
-    toastEl.textContent = msg;
-    toastEl.classList.add("show");
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toastEl.classList.remove("show"), 1600);
+    toastEl.textContent = msg; toastEl.classList.add("show");
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove("show"), 1600);
   }
 
-  /* -------------------- 简易路由 -------------------- */
-  let currentGame = null; // 当前游戏对象（含 teardown）
+  /* -------------------- 路由 -------------------- */
+  let currentGame = null;
   function leaveGame() { if (currentGame && currentGame.teardown) { try { currentGame.teardown(); } catch (_) {} } currentGame = null; }
   function mount(node) { leaveGame(); app.innerHTML = ""; app.appendChild(node); window.scrollTo(0, 0); }
-
   function goHome() { mount(renderHome()); }
   document.getElementById("brand-home").addEventListener("click", goHome);
   document.getElementById("brand-home").addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") goHome(); });
 
+  const accentVars = (name) => ({ "--accent": `var(--${name})`, "--accent-2": `var(--${name}-2)` });
+
   /* -------------------- 游戏元信息 -------------------- */
   const GAMES = [
-    { id: "reason",   icon: "🧩", name: "密码破译", tag: "REASONING", skill: "推理",
-      desc: "根据每次反馈，一步步演绎出隐藏的四色密码。锻炼逻辑演绎与假设检验。",
-      accent: "reason", best: () => { const s = Store.get("best.reason", null); return s ? s + " 步" : null; }, start: startReason },
-    { id: "logic",    icon: "🧠", name: "数列推理", tag: "LOGIC", skill: "思维",
+    { id: "reason", icon: "🧩", name: "密码破译", tag: "REASONING", skill: "推理", accent: "reason",
+      desc: "根据每次反馈，一步步演绎出隐藏的颜色密码。锻炼逻辑演绎与假设检验。",
+      lowerBetter: true, bestLabel: (v) => v + " 步", start: startReason },
+    { id: "logic", icon: "🧠", name: "数列推理", tag: "LOGIC", skill: "思维", accent: "logic",
       desc: "在限定时间内找出数字规律，选出下一项。锻炼归纳、抽象与逻辑思维。",
-      accent: "logic",  best: () => { const s = Store.get("best.logic", 0); return s ? s + " 分" : null; }, start: startLogic },
-    { id: "reaction", icon: "⚡", name: "极速反应", tag: "REACTION", skill: "反应",
+      lowerBetter: false, bestLabel: (v) => v + " 分", start: startLogic },
+    { id: "reaction", icon: "⚡", name: "极速反应", tag: "REACTION", skill: "反应", accent: "reaction",
       desc: "目标出现的瞬间立即点击，测量你的平均反应速度（毫秒）。抢跑无效！",
-      accent: "reaction", best: () => { const s = Store.get("best.reaction", 0); return s ? s + " ms" : null; }, start: startReaction },
-    { id: "spatial",  icon: "🔷", name: "空间旋转", tag: "SPATIAL", skill: "维度",
+      lowerBetter: true, bestLabel: (v) => v + " ms", start: startReaction },
+    { id: "spatial", icon: "🔷", name: "空间旋转", tag: "SPATIAL", skill: "维度", accent: "spatial",
       desc: "判断哪个图形是参考图形旋转后的样子（小心镜像陷阱）。锻炼空间想象与心理旋转。",
-      accent: "spatial", best: () => { const s = Store.get("best.spatial", 0); return s ? s + " 分" : null; }, start: startSpatial },
+      lowerBetter: false, bestLabel: (v) => v + " 分", start: startSpatial },
+    { id: "schulte", icon: "🔢", name: "舒尔特方格", tag: "ATTENTION", skill: "综合", accent: "schulte", featured: true,
+      desc: "在乱序方格中，按 1→N 顺序依次点击，用时越短越好。综合锻炼反应、专注、空间注意与视觉搜索。",
+      lowerBetter: true, bestLabel: (v) => (v / 1000).toFixed(1) + " 秒", start: startSchulte },
   ];
-
-  function accentVars(name) {
-    return { "--accent": `var(--${name})`, "--accent-2": `var(--${name}-2)` };
-  }
+  const meta = (id) => GAMES.find((g) => g.id === id);
 
   /* ==========================================================
      首页
      ========================================================== */
   function renderHome() {
     const cards = GAMES.map((g) => {
-      const best = g.best();
-      return h("button", { class: "game-card", style: accentVars(g.accent), onclick: () => { Sound.click(); g.start(); } },
+      const d = getDiff(g.id), b = getBest(g.id, d);
+      return h("button", { class: "game-card" + (g.featured ? " featured" : ""), style: accentVars(g.accent),
+        onclick: () => { Sound.click(); g.start(getDiff(g.id)); } },
         h("div", { class: "gc-top" },
           h("div", { class: "gc-icon" }, g.icon),
           h("div", { class: "gc-title" }, h("b", null, g.name), h("span", null, g.skill + " · " + g.tag))
         ),
         h("p", { class: "gc-desc" }, g.desc),
         h("div", { class: "gc-foot" },
-          h("span", { class: "gc-best" }, best ? ["最佳 ", h("b", null, best)] : "尚无记录"),
+          h("span", { class: "gc-best" }, b == null ? "尚无记录" : ["最佳 ", h("b", null, g.bestLabel(b)), " · " + diffName(d)]),
           h("span", { class: "gc-play" }, "开始 ▶")
         )
       );
     });
-
     return h("section", { class: "screen" },
       h("div", { class: "home-intro" },
         h("h1", null, "选择你的训练"),
-        h("p", null, "四个维度 · 逐一挑战，或每天全部过一遍。祝你脑力更上一层楼 🚀")
+        h("p", null, "五个模块 · 三档难度 · 逐一挑战，或每天全部过一遍。祝你脑力更上一层楼 🚀")
       ),
       h("div", { class: "card-grid" }, cards)
     );
   }
 
-  /* -------------------- 游戏外壳（头部 + 面板） -------------------- */
-  function gameShell(game, titleExtra, pills) {
+  /* -------------------- 游戏外壳 -------------------- */
+  // diffBar: 难度分段控件，切换即以新难度重开本游戏
+  function diffBar(game, curDiff) {
+    const bar = h("div", { class: "diffbar" }, h("span", { class: "diffbar-label" }, "难度"));
+    DIFFS.forEach((d) => {
+      bar.appendChild(h("button", {
+        class: "diff-seg" + (d.id === curDiff ? " active" : ""),
+        onclick: () => { if (d.id === curDiff) return; Sound.click(); setDiff(game.id, d.id); game.start(d.id); },
+      }, d.name));
+    });
+    return bar;
+  }
+
+  function gameShell(game, curDiff, pills) {
     const head = h("div", { class: "game-head" },
       h("button", { class: "back-btn", onclick: () => { Sound.click(); goHome(); } }, "‹ 返回"),
       h("h2", null, game.icon + " " + game.name),
@@ -160,28 +179,50 @@
       h("div", { class: "stat-pills" }, pills || [])
     );
     const panel = h("div", { class: "panel" });
-    const section = h("section", { class: "screen", style: accentVars(game.accent) }, head, panel);
+    const section = h("section", { class: "screen", style: accentVars(game.accent) }, head, diffBar(game, curDiff), panel);
     return { section, panel, head };
   }
 
-  function meta(id) { return GAMES.find((g) => g.id === id); }
+  function bestPillEl(game, diff) {
+    const b = getBest(game.id, diff);
+    return h("div", { class: "pill accent" }, "最佳 ", h("b", null, b == null ? "—" : game.bestLabel(b)));
+  }
+
+  // 通用结算卡
+  function resultCard(opts) {
+    return h("div", { class: "result-card" },
+      h("div", { class: "result-emoji" }, opts.emoji),
+      opts.isBest ? h("div", { class: "new-best" }, "新纪录！") : null,
+      h("h3", null, opts.title),
+      opts.big != null ? h("div", { class: "big-num" }, opts.big) : null,
+      h("div", { class: "sub" }, opts.sub),
+      opts.extra || null,
+      h("div", { class: "row center" },
+        h("button", { class: "btn", onclick: opts.onRetry }, "再来一局"),
+        h("button", { class: "btn ghost", onclick: goHome }, "返回首页"))
+    );
+  }
 
   /* ==========================================================
      1) 推理 · 密码破译（Mastermind）
      ========================================================== */
-  function startReason() {
+  const REASON_CFG = {
+    easy: { colors: 6, slots: 4, tries: 12 },
+    normal: { colors: 6, slots: 4, tries: 10 },
+    hard: { colors: 7, slots: 5, tries: 10 },
+  };
+  function startReason(diff) {
+    diff = diff || getDiff("reason");
     const game = meta("reason");
-    const COLORS = 6, SLOTS = 4, MAX_TRIES = 10;
+    const cfg = REASON_CFG[diff], COLORS = cfg.colors, SLOTS = cfg.slots, MAX_TRIES = cfg.tries;
     const secret = Array.from({ length: SLOTS }, () => rand(COLORS));
 
-    let attempt = 0;
-    let current = Array(SLOTS).fill(-1);
-    let selColor = 0;
-    let done = false;
+    let attempt = 0, current = Array(SLOTS).fill(-1), selColor = 0, done = false;
+    const history = [];
 
-    const bestPill = h("div", { class: "pill accent" }, "最佳 ", h("b", null, (() => { const s = Store.get("best.reason", null); return s ? s + "步" : "—"; })()));
     const triesPill = h("div", { class: "pill" }, "剩余 ", h("b", null, String(MAX_TRIES)));
-    const shell = gameShell(game, null, [triesPill, bestPill]);
+    const bp = bestPillEl(game, diff);
+    const shell = gameShell(game, diff, [triesPill, bp]);
 
     const boardEl = h("div", { class: "mm-board" });
     const paletteEl = h("div", { class: "palette" });
@@ -189,138 +230,76 @@
     const statusEl = h("div", { class: "center mt", style: { minHeight: "24px", color: "var(--muted)" } });
 
     shell.panel.appendChild(h("p", { class: "hint" },
-      "我随机生成了一个由 ", h("b", null, "4 个颜色"), " 组成的密码（颜色可重复，共 6 种）。",
-      "选颜色填满一行后点确认，我会给出提示：",
+      "我随机生成了一个由 ", h("b", null, SLOTS + " 个颜色"), " 组成的密码（颜色可重复，共 " + COLORS + " 种）。选颜色填满一行后点确认，我会给出提示：",
       h("b", { style: { color: "#fff" } }, " ●实心 "), "= 颜色和位置都对；",
-      h("b", null, " ○空心 "), "= 颜色对但位置错。共 ", h("b", null, "10"), " 次机会。"
-    ));
+      h("b", null, " ○空心 "), "= 颜色对但位置错。共 ", h("b", null, String(MAX_TRIES)), " 次机会。"));
     shell.panel.appendChild(boardEl);
     shell.panel.appendChild(paletteEl);
-    shell.panel.appendChild(h("div", { class: "row center mt" }, submitBtn,
-      h("button", { class: "btn ghost", onclick: clearRow }, "清空")));
+    shell.panel.appendChild(h("div", { class: "row center mt" }, submitBtn, h("button", { class: "btn ghost", onclick: clearRow }, "清空")));
     shell.panel.appendChild(statusEl);
 
     function buildPalette() {
       paletteEl.innerHTML = "";
-      for (let c = 0; c < COLORS; c++) {
-        const sw = h("div", { class: "swatch color-" + c + (c === selColor ? " active" : ""), title: "颜色 " + (c + 1),
-          onclick: () => { selColor = c; buildPalette(); Sound.click(); } });
-        paletteEl.appendChild(sw);
-      }
+      for (let c = 0; c < COLORS; c++)
+        paletteEl.appendChild(h("div", { class: "swatch color-" + c + (c === selColor ? " active" : ""), title: "颜色 " + (c + 1),
+          onclick: () => { selColor = c; buildPalette(); Sound.click(); } }));
     }
-
     function renderBoard() {
       boardEl.innerHTML = "";
-      // 已猜的行（从新到旧显示在下方更直观：这里按顺序，最新在最后）
       for (let r = 0; r < MAX_TRIES; r++) {
         const isCurrent = r === attempt && !done;
-        const row = h("div", { class: "mm-row" + (isCurrent ? " current" : "") });
-        row.appendChild(h("div", { class: "mm-idx" }, String(r + 1)));
+        const row = h("div", { class: "mm-row" + (isCurrent ? " current" : "") }, h("div", { class: "mm-idx" }, String(r + 1)));
         const pegs = h("div", { class: "mm-pegs" });
-        const guessData = history[r];
+        const gd = history[r];
         for (let s = 0; s < SLOTS; s++) {
-          let colorIdx = -1;
-          if (guessData) colorIdx = guessData.guess[s];
-          else if (isCurrent) colorIdx = current[s];
-          const peg = h("div", {
-            class: "peg " + (colorIdx >= 0 ? "color-" + colorIdx : "color-empty"),
-            onclick: isCurrent ? () => setSlot(s) : null,
-          });
-          pegs.appendChild(peg);
+          const colorIdx = gd ? gd.guess[s] : (isCurrent ? current[s] : -1);
+          pegs.appendChild(h("div", { class: "peg " + (colorIdx >= 0 ? "color-" + colorIdx : "color-empty"), onclick: isCurrent ? () => setSlot(s) : null }));
         }
         row.appendChild(pegs);
-        // 反馈点
         const fb = h("div", { class: "mm-feedback" });
-        if (guessData) {
-          for (let i = 0; i < guessData.exact; i++) fb.appendChild(h("div", { class: "fb-dot exact" }));
-          for (let i = 0; i < guessData.color; i++) fb.appendChild(h("div", { class: "fb-dot color" }));
-          const blanks = SLOTS - guessData.exact - guessData.color;
-          for (let i = 0; i < blanks; i++) fb.appendChild(h("div", { class: "fb-dot" }));
-        } else {
-          for (let i = 0; i < SLOTS; i++) fb.appendChild(h("div", { class: "fb-dot" }));
-        }
+        if (gd) {
+          for (let i = 0; i < gd.exact; i++) fb.appendChild(h("div", { class: "fb-dot exact" }));
+          for (let i = 0; i < gd.color; i++) fb.appendChild(h("div", { class: "fb-dot color" }));
+          for (let i = 0; i < SLOTS - gd.exact - gd.color; i++) fb.appendChild(h("div", { class: "fb-dot" }));
+        } else for (let i = 0; i < SLOTS; i++) fb.appendChild(h("div", { class: "fb-dot" }));
         row.appendChild(fb);
         boardEl.appendChild(row);
       }
     }
-
-    const history = []; // {guess, exact, color}
-
-    function setSlot(s) {
-      if (done) return;
-      current[s] = selColor;
-      Sound.click();
-      updateSubmit();
-      renderBoard();
-    }
+    function setSlot(s) { if (done) return; current[s] = selColor; Sound.click(); updateSubmit(); renderBoard(); }
     function clearRow() { if (done) return; current = Array(SLOTS).fill(-1); updateSubmit(); renderBoard(); }
     function updateSubmit() { submitBtn.disabled = current.some((c) => c < 0); }
-
     function evaluate(guess) {
-      let exact = 0, color = 0;
-      const sc = {}, gc = {};
-      for (let i = 0; i < SLOTS; i++) {
-        if (guess[i] === secret[i]) exact++;
-        else { sc[secret[i]] = (sc[secret[i]] || 0) + 1; gc[guess[i]] = (gc[guess[i]] || 0) + 1; }
-      }
+      let exact = 0, color = 0; const sc = {}, gc = {};
+      for (let i = 0; i < SLOTS; i++) { if (guess[i] === secret[i]) exact++; else { sc[secret[i]] = (sc[secret[i]] || 0) + 1; gc[guess[i]] = (gc[guess[i]] || 0) + 1; } }
       for (const c in gc) if (sc[c]) color += Math.min(sc[c], gc[c]);
       return { exact, color };
     }
-
     function submit() {
       if (done || current.some((c) => c < 0)) return;
       const res = evaluate(current);
       history[attempt] = { guess: current.slice(), exact: res.exact, color: res.color };
-      attempt++;
-      triesPill.querySelector("b").textContent = String(MAX_TRIES - attempt);
-
-      if (res.exact === SLOTS) { win(); }
-      else if (attempt >= MAX_TRIES) { lose(); }
+      attempt++; triesPill.querySelector("b").textContent = String(MAX_TRIES - attempt);
+      if (res.exact === SLOTS) win();
+      else if (attempt >= MAX_TRIES) lose();
       else { Sound.click(); current = Array(SLOTS).fill(-1); updateSubmit(); renderBoard(); }
     }
-
-    function endUI(node) {
-      paletteEl.style.display = "none";
-      submitBtn.style.display = "none";
-      statusEl.innerHTML = "";
-      statusEl.appendChild(node);
-    }
-
+    function endUI(node) { paletteEl.style.display = "none"; submitBtn.parentElement.style.display = "none"; statusEl.innerHTML = ""; statusEl.appendChild(node); }
     function win() {
-      done = true; Sound.win();
-      const steps = attempt;
-      const prev = Store.get("best.reason", null);
-      const isBest = prev == null || steps < prev;
-      if (isBest) { Store.set("best.reason", steps); bestPill.querySelector("b").textContent = steps + "步"; }
-      renderBoard();
-      endUI(h("div", { class: "result-card" },
-        h("div", { class: "result-emoji" }, "🎉"),
-        isBest ? h("div", { class: "new-best" }, "新纪录！") : null,
-        h("h3", null, "破译成功！"),
-        h("div", { class: "sub" }, "你用了 " + steps + " 步" + (prev != null ? "（历史最佳 " + Store.get("best.reason") + " 步）" : "")),
-        h("div", { class: "row center" },
-          h("button", { class: "btn", onclick: startReason }, "再来一局"),
-          h("button", { class: "btn ghost", onclick: goHome }, "返回首页"))
-      ));
+      done = true; Sound.win(); renderBoard();
+      const steps = attempt, rec = recordBest("reason", diff, steps, true);
+      if (rec.isBest) bp.querySelector("b").textContent = game.bestLabel(steps);
+      endUI(resultCard({ emoji: "🎉", isBest: rec.isBest, title: "破译成功！",
+        sub: "你用了 " + steps + " 步" + (rec.best != null ? "（" + diffName(diff) + "最佳 " + rec.best + " 步）" : ""),
+        onRetry: () => startReason(diff) }));
     }
-
     function lose() {
-      done = true; Sound.bad();
-      renderBoard();
-      endUI(h("div", { class: "result-card" },
-        h("div", { class: "result-emoji" }, "🔒"),
-        h("h3", null, "机会用完啦"),
-        h("div", { class: "sub" }, "正确密码是："),
-        h("div", { class: "mm-pegs", style: { justifyContent: "center", marginBottom: "16px" } },
-          secret.map((c) => h("div", { class: "peg color-" + c }))),
-        h("div", { class: "row center" },
-          h("button", { class: "btn", onclick: startReason }, "再挑战一次"),
-          h("button", { class: "btn ghost", onclick: goHome }, "返回首页"))
-      ));
+      done = true; Sound.bad(); renderBoard();
+      endUI(resultCard({ emoji: "🔒", title: "机会用完啦", sub: "正确密码是：",
+        extra: h("div", { class: "mm-pegs", style: { justifyContent: "center", margin: "6px 0 16px" } }, secret.map((c) => h("div", { class: "peg color-" + c }))),
+        onRetry: () => startReason(diff) }));
     }
-
-    buildPalette();
-    renderBoard();
+    buildPalette(); renderBoard();
     mount(shell.section);
     currentGame = { teardown() {} };
   }
@@ -328,136 +307,86 @@
   /* ==========================================================
      2) 思维 · 数列推理
      ========================================================== */
-  function startLogic() {
-    const game = meta("logic");
-    const DURATION = 60; // 秒
-    let score = 0, streak = 0, best = Store.get("best.logic", 0);
-    let timeLeft = DURATION, tickTimer = null, answered = false;
+  const LOGIC_CFG = {
+    easy: { duration: 70, types: ["arith", "geoS", "fib"] },
+    normal: { duration: 60, types: ["arith", "geo", "fib", "square", "altAdd", "n2n", "tri"] },
+    hard: { duration: 52, types: ["arith", "geo", "fib", "square", "altAdd", "n2n", "tri", "interleave", "doubleMinus"] },
+  };
+  // 每个生成器返回 {seq:[5项], answer, note}
+  const SEQ_GEN = {
+    arith() { const s = rand(9) + 1, d = pick([2, 3, 4, 5, 6, 7, -2, -3, -4]); const seq = []; for (let i = 0; i < 5; i++) seq.push(s + d * i); return { seq, answer: s + d * 5, note: "等差数列" }; },
+    geoS() { const s = rand(3) + 1; const seq = []; for (let i = 0; i < 5; i++) seq.push(s * Math.pow(2, i)); return { seq, answer: s * Math.pow(2, 5), note: "等比数列（×2）" }; },
+    geo() { const s = rand(3) + 1, r = pick([2, 3]); const seq = []; for (let i = 0; i < 5; i++) seq.push(s * Math.pow(r, i)); return { seq, answer: s * Math.pow(r, 5), note: "等比数列（×" + r + "）" }; },
+    fib() { const seq = [rand(4) + 1, rand(5) + 1]; for (let i = 2; i < 5; i++) seq.push(seq[i - 1] + seq[i - 2]); return { seq, answer: seq[4] + seq[3], note: "相邻两项之和" }; },
+    square() { const k = rand(3) + 1; const seq = []; for (let i = 0; i < 5; i++) seq.push((i + k) * (i + k)); return { seq, answer: (5 + k) * (5 + k), note: "完全平方数" }; },
+    altAdd() { const s = rand(6) + 1, a = rand(4) + 2, b = rand(5) + 3; const seq = [s]; for (let i = 1; i < 5; i++) seq.push(seq[i - 1] + (i % 2 ? a : b)); return { seq, answer: seq[4] + (5 % 2 ? a : b), note: "交替 +" + a + " / +" + b }; },
+    n2n() { const seq = []; for (let i = 1; i <= 5; i++) seq.push(i * i + i); return { seq, answer: 6 * 6 + 6, note: "n²+n" }; },
+    tri() { const off = rand(3); const seq = []; for (let i = 1; i <= 5; i++) { const n = i + off; seq.push(n * (n + 1) / 2); } const n = 6 + off; return { seq, answer: n * (n + 1) / 2, note: "三角形数" }; },
+    interleave() { const sa = rand(6) + 1, da = rand(4) + 2, sb = rand(6) + 2, db = rand(4) + 3; const seq = [sa, sb, sa + da, sb + db, sa + 2 * da]; return { seq, answer: sb + 2 * db, note: "双数列交替" }; },
+    doubleMinus() { const seq = [rand(3) + 2]; for (let i = 1; i < 5; i++) seq.push(seq[i - 1] * 2 - 1); return { seq, answer: seq[4] * 2 - 1, note: "每项 ×2−1" }; },
+  };
+  function genPuzzle(types) {
+    const p = SEQ_GEN[pick(types)]();
+    const opts = new Set([p.answer]);
+    const spread = Math.max(1, Math.round(Math.abs(p.answer) * 0.12)) + rand(3) + 1;
+    let guard = 0;
+    while (opts.size < 4 && guard++ < 60) { const cand = p.answer + (rand(2) ? 1 : -1) * (rand(spread) + 1); if (cand !== p.answer && cand >= 0) opts.add(cand); }
+    // 兜底：用独立自增的偏移量补齐，保证每次都在推进（避免与已有干扰项碰撞导致死循环）
+    for (let extra = 1; opts.size < 4; extra++) opts.add(p.answer + extra);
+    p.options = shuffle([...opts]);
+    return p;
+  }
+  function startLogic(diff) {
+    diff = diff || getDiff("logic");
+    const game = meta("logic"), cfg = LOGIC_CFG[diff], DURATION = cfg.duration;
+    let score = 0, streak = 0, timeLeft = DURATION, tickTimer = null, answered = false;
 
     const scorePill = h("div", { class: "pill accent" }, "得分 ", h("b", null, "0"));
     const streakPill = h("div", { class: "pill" }, "连击 ", h("b", null, "0"));
     const timePill = h("div", { class: "pill" }, "⏱ ", h("b", null, DURATION + "s"));
-    const shell = gameShell(game, null, [scorePill, streakPill, timePill]);
+    const shell = gameShell(game, diff, [scorePill, streakPill, timePill]);
 
-    const bar = h("i");
-    const timebar = h("div", { class: "timebar" }, bar);
+    const bar = h("i"), timebar = h("div", { class: "timebar" }, bar);
     const displayEl = h("div", { class: "seq-display" });
     const subEl = h("div", { class: "seq-sub" });
     const optionsEl = h("div", { class: "seq-options" });
-
-    shell.panel.appendChild(h("p", { class: "hint" }, "找出数字之间的 ", h("b", null, "规律"), "，选出问号处应该填的数。答对得分并累积连击，", h("b", null, "60 秒"), " 内挑战最高分！"));
-    shell.panel.appendChild(timebar);
-    shell.panel.appendChild(displayEl);
-    shell.panel.appendChild(subEl);
-    shell.panel.appendChild(optionsEl);
-
-    // ---- 数列生成器：返回 {seq:[5项], answer, note} ----
-    function genPuzzle() {
-      const type = rand(7);
-      let seq = [], answer = 0, note = "";
-      if (type === 0) { // 等差
-        const s = rand(9) + 1, d = pick([2, 3, 4, 5, 6, 7, -2, -3, -4]);
-        for (let i = 0; i < 5; i++) seq.push(s + d * i);
-        answer = s + d * 5; note = "等差数列";
-      } else if (type === 1) { // 等比
-        const s = rand(3) + 1, r = pick([2, 3]);
-        for (let i = 0; i < 5; i++) seq.push(s * Math.pow(r, i));
-        answer = s * Math.pow(r, 5); note = "等比数列";
-      } else if (type === 2) { // 斐波那契式
-        let a = rand(4) + 1, b = rand(5) + 1; seq = [a, b];
-        for (let i = 2; i < 5; i++) seq.push(seq[i - 1] + seq[i - 2]);
-        answer = seq[4] + seq[3]; note = "相邻两项之和";
-      } else if (type === 3) { // 平方
-        const k = rand(3) + 1;
-        for (let i = 0; i < 5; i++) seq.push((i + k) * (i + k));
-        answer = (5 + k) * (5 + k); note = "完全平方数";
-      } else if (type === 4) { // 交替加
-        const s = rand(6) + 1, a = rand(4) + 2, b = rand(5) + 3; seq = [s];
-        for (let i = 1; i < 5; i++) seq.push(seq[i - 1] + (i % 2 ? a : b));
-        answer = seq[4] + (5 % 2 ? a : b); note = "交替递增";
-      } else if (type === 5) { // n^2 + n
-        for (let i = 1; i <= 5; i++) seq.push(i * i + i);
-        answer = 6 * 6 + 6; note = "n²+n";
-      } else { // 三角形数
-        const off = rand(3);
-        for (let i = 1; i <= 5; i++) { const n = i + off; seq.push(n * (n + 1) / 2); }
-        const n = 6 + off; answer = n * (n + 1) / 2; note = "三角形数";
-      }
-      // 干扰项
-      const opts = new Set([answer]);
-      const spread = Math.max(1, Math.round(Math.abs(answer) * 0.12)) + rand(3) + 1;
-      let guard = 0;
-      while (opts.size < 4 && guard++ < 50) {
-        const delta = (rand(2) ? 1 : -1) * (rand(spread) + 1);
-        const cand = answer + delta;
-        if (cand !== answer && cand >= 0) opts.add(cand);
-      }
-      while (opts.size < 4) opts.add(answer + opts.size);
-      return { seq, answer, note, options: shuffle([...opts]) };
-    }
+    shell.panel.appendChild(h("p", { class: "hint" }, "找出数字之间的 ", h("b", null, "规律"), "，选出问号处应该填的数。答对得分并累积连击，", h("b", null, DURATION + " 秒"), " 内挑战最高分！"));
+    shell.panel.appendChild(timebar); shell.panel.appendChild(displayEl); shell.panel.appendChild(subEl); shell.panel.appendChild(optionsEl);
 
     function nextRound() {
       answered = false;
-      const p = genPuzzle();
+      const p = genPuzzle(cfg.types);
       displayEl.innerHTML = "";
       p.seq.forEach((n) => { displayEl.appendChild(h("span", null, String(n))); displayEl.appendChild(h("span", { style: { color: "var(--muted-2)" } }, ",")); });
       displayEl.appendChild(h("span", { class: "seq-q" }, "?"));
       subEl.textContent = "";
       optionsEl.innerHTML = "";
-      p.options.forEach((val) => {
-        const btn = h("button", { class: "seq-opt", onclick: () => choose(btn, val, p) }, String(val));
-        optionsEl.appendChild(btn);
-      });
+      p.options.forEach((val) => optionsEl.appendChild(h("button", { class: "seq-opt", onclick: (e) => choose(e.currentTarget, val, p) }, String(val))));
     }
-
     function choose(btn, val, p) {
-      if (answered) return;
-      answered = true;
-      const buttons = [...optionsEl.children];
-      buttons.forEach((b) => { b.disabled = true; if (Number(b.textContent) === p.answer) b.classList.add("correct"); });
+      if (answered) return; answered = true;
+      [...optionsEl.children].forEach((b) => { b.disabled = true; if (Number(b.textContent) === p.answer) b.classList.add("correct"); });
       if (val === p.answer) {
-        const bonus = Math.min(streak, 8);
-        const gained = 10 + bonus * 2;
+        const bonus = Math.min(streak, 8), gained = 10 + bonus * 2;
         score += gained; streak++;
-        scorePill.querySelector("b").textContent = String(score);
-        streakPill.querySelector("b").textContent = String(streak);
+        scorePill.querySelector("b").textContent = String(score); streakPill.querySelector("b").textContent = String(streak);
         subEl.textContent = "✔ 规律：" + p.note + "  +" + gained + (bonus ? "（连击 +" + bonus * 2 + "）" : "");
         Sound.good();
       } else {
-        btn.classList.add("wrong");
-        streak = 0; streakPill.querySelector("b").textContent = "0";
-        subEl.textContent = "✘ 规律：" + p.note + "，正确答案 " + p.answer;
-        Sound.bad();
+        btn.classList.add("wrong"); streak = 0; streakPill.querySelector("b").textContent = "0";
+        subEl.textContent = "✘ 规律：" + p.note + "，正确答案 " + p.answer; Sound.bad();
       }
       setTimeout(() => { if (timeLeft > 0) nextRound(); }, 850);
     }
-
-    function tick() {
-      timeLeft -= 0.1;
-      if (timeLeft <= 0) { timeLeft = 0; finish(); }
-      timePill.querySelector("b").textContent = Math.ceil(timeLeft) + "s";
-      bar.style.width = (timeLeft / DURATION * 100) + "%";
-    }
-
+    function tick() { timeLeft -= 0.1; if (timeLeft <= 0) { timeLeft = 0; finish(); } timePill.querySelector("b").textContent = Math.ceil(timeLeft) + "s"; bar.style.width = (timeLeft / DURATION * 100) + "%"; }
     function finish() {
       clearInterval(tickTimer); tickTimer = null;
-      const isBest = score > best;
-      if (isBest) { best = score; Store.set("best.logic", score); }
+      const rec = recordBest("logic", diff, score, false);
       shell.panel.innerHTML = "";
-      shell.panel.appendChild(h("div", { class: "result-card" },
-        h("div", { class: "result-emoji" }, score >= 120 ? "🏆" : score >= 60 ? "🎉" : "💡"),
-        isBest && score > 0 ? h("div", { class: "new-best" }, "新纪录！") : null,
-        h("h3", null, "时间到！"),
-        h("div", { class: "big-num" }, String(score)),
-        h("div", { class: "sub" }, "历史最佳 " + best + " 分"),
-        h("div", { class: "row center" },
-          h("button", { class: "btn", onclick: startLogic }, "再来一局"),
-          h("button", { class: "btn ghost", onclick: goHome }, "返回首页"))
-      ));
+      shell.panel.appendChild(resultCard({ emoji: score >= 120 ? "🏆" : score >= 60 ? "🎉" : "💡", isBest: rec.isBest && score > 0,
+        title: "时间到！", big: String(score), sub: diffName(diff) + "最佳 " + (rec.best || 0) + " 分", onRetry: () => startLogic(diff) }));
     }
-
-    nextRound();
-    tickTimer = setInterval(tick, 100);
+    nextRound(); tickTimer = setInterval(tick, 100);
     mount(shell.section);
     currentGame = { teardown() { clearInterval(tickTimer); } };
   }
@@ -465,110 +394,75 @@
   /* ==========================================================
      3) 反应 · 极速反应
      ========================================================== */
-  function startReaction() {
-    const game = meta("reaction");
-    const ROUNDS = 10;
-    let round = 0;
-    const times = [];
-    let state = "idle"; // idle | ready(等待出现) | go(已出现可点) | done
-    let appearAt = 0, spawnTimer = null, target = null;
+  const REACTION_CFG = {
+    easy: { rounds: 8, size: 84, minD: 800, maxD: 2600 },
+    normal: { rounds: 10, size: 66, minD: 800, maxD: 3000 },
+    hard: { rounds: 12, size: 48, minD: 600, maxD: 3400 },
+  };
+  function startReaction(diff) {
+    diff = diff || getDiff("reaction");
+    const game = meta("reaction"), cfg = REACTION_CFG[diff], ROUNDS = cfg.rounds;
+    let round = 0; const times = [];
+    let state = "idle", appearAt = 0, spawnTimer = null, target = null;
 
-    const bestPill = h("div", { class: "pill accent" }, "最佳 ", h("b", null, (() => { const b = Store.get("best.reaction", 0); return b ? b + "ms" : "—"; })()));
     const roundPill = h("div", { class: "pill" }, "目标 ", h("b", null, "0/" + ROUNDS));
     const lastPill = h("div", { class: "pill" }, "上次 ", h("b", null, "—"));
-    const shell = gameShell(game, null, [roundPill, lastPill, bestPill]);
+    const bp = bestPillEl(game, diff);
+    const shell = gameShell(game, diff, [roundPill, lastPill, bp]);
 
     shell.panel.appendChild(h("p", { class: "hint" }, "点击 “开始” 后，", h("b", null, "⚡目标"), " 会在随机延迟后出现在场内任意位置——", h("b", null, "看到就立刻点它！"), " 共 ", h("b", null, ROUNDS + " 个"), "，统计平均反应毫秒数（越小越强）。抢跑会重来哦。"));
-
     const arena = h("div", { class: "react-arena", onpointerdown: onArenaDown });
     const center = h("div", { class: "react-center" });
-    arena.appendChild(center);
-    shell.panel.appendChild(arena);
+    arena.appendChild(center); shell.panel.appendChild(arena);
 
     function setCenter(node, show) { center.innerHTML = ""; if (node) center.appendChild(node); center.style.display = show === false ? "none" : "grid"; }
     function setArenaState(s) { arena.className = "react-arena" + (s ? " state-" + s : ""); }
-
     function showIntro() {
       state = "idle"; setArenaState("");
-      setCenter(h("div", null,
-        h("h3", null, "准备好了吗？"),
-        h("p", null, "点击下方按钮开始，专注屏幕"),
-        h("button", { class: "btn mt", onclick: (e) => { e.stopPropagation(); Sound.click(); scheduleNext(); } }, "开始 ▶")
-      ));
+      setCenter(h("div", null, h("h3", null, "准备好了吗？"), h("p", null, "点击下方按钮开始，专注屏幕"),
+        h("button", { class: "btn mt", onclick: (e) => { e.stopPropagation(); Sound.click(); scheduleNext(); } }, "开始 ▶")));
     }
-
     function scheduleNext() {
       state = "ready"; setArenaState("ready");
       setCenter(h("div", null, h("h3", null, "等待 ⚡ 出现…"), h("p", null, "先别点！")));
-      const delay = 800 + rand(2200);
-      clearTimeout(spawnTimer);
-      spawnTimer = setTimeout(spawnTarget, delay);
+      clearTimeout(spawnTimer); spawnTimer = setTimeout(spawnTarget, cfg.minD + rand(cfg.maxD - cfg.minD));
     }
-
     function spawnTarget() {
       state = "go"; setArenaState("go"); setCenter(null, false);
-      const rect = arena.getBoundingClientRect();
-      const pad = 46;
-      const x = pad + Math.random() * (rect.width - pad * 2);
-      const y = pad + Math.random() * (rect.height - pad * 2);
-      target = h("div", { class: "target", style: { left: x + "px", top: y + "px" }, onpointerdown: onHit });
-      arena.appendChild(target);
-      appearAt = performance.now();
-      Sound.pop();
+      const rect = arena.getBoundingClientRect(), pad = cfg.size / 2 + 12;
+      const x = pad + Math.random() * (rect.width - pad * 2), y = pad + Math.random() * (rect.height - pad * 2);
+      target = h("div", { class: "target", style: { left: x + "px", top: y + "px", width: cfg.size + "px", height: cfg.size + "px" }, onpointerdown: onHit });
+      arena.appendChild(target); appearAt = performance.now(); Sound.pop();
     }
-
     function onHit(e) {
-      e.stopPropagation();
-      if (state !== "go") return;
+      e.stopPropagation(); if (state !== "go") return;
       const rt = Math.round(performance.now() - appearAt);
       times.push(rt); round++;
-      lastPill.querySelector("b").textContent = rt + "ms";
-      roundPill.querySelector("b").textContent = round + "/" + ROUNDS;
+      lastPill.querySelector("b").textContent = rt + "ms"; roundPill.querySelector("b").textContent = round + "/" + ROUNDS;
       if (target) { target.remove(); target = null; }
       Sound.good();
       if (round >= ROUNDS) finish();
       else { flash(rt); setTimeout(scheduleNext, 350); }
     }
-
-    function flash(rt) {
-      setArenaState("");
-      setCenter(h("div", null, h("div", { class: "react-big", style: { color: "var(--reaction)" } }, rt + "ms"),
-        h("p", null, round + " / " + ROUNDS + " 完成")));
-    }
-
+    function flash(rt) { setArenaState(""); setCenter(h("div", null, h("div", { class: "react-big", style: { color: "var(--reaction)" } }, rt + "ms"), h("p", null, round + " / " + ROUNDS + " 完成"))); }
     function onArenaDown() {
-      // 在 ready 阶段点击 = 抢跑
       if (state === "ready") {
-        clearTimeout(spawnTimer);
-        state = "early"; setArenaState("early");
-        Sound.bad();
+        clearTimeout(spawnTimer); state = "early"; setArenaState("early"); Sound.bad();
         setCenter(h("div", null, h("h3", null, "抢跑啦！🐇"), h("p", null, "等目标出现再点"),
           h("button", { class: "btn mt", onclick: (e) => { e.stopPropagation(); Sound.click(); scheduleNext(); } }, "重新等待")));
       }
     }
-
     function finish() {
       state = "done";
-      const avg = Math.round(times.reduce((a, b) => a + b, 0) / times.length);
-      const fastest = Math.min(...times);
-      const prev = Store.get("best.reaction", 0);
-      const isBest = prev === 0 || avg < prev;
-      if (isBest) { Store.set("best.reaction", avg); bestPill.querySelector("b").textContent = avg + "ms"; }
+      const avg = Math.round(times.reduce((a, b) => a + b, 0) / times.length), fastest = Math.min(...times);
+      const rec = recordBest("reaction", diff, avg, true);
+      if (rec.isBest) bp.querySelector("b").textContent = avg + " ms";
       Sound.win();
       const grade = avg < 260 ? { e: "⚡", t: "闪电般的反应！" } : avg < 340 ? { e: "🎯", t: "反应很敏捷" } : avg < 430 ? { e: "👍", t: "不错的水平" } : { e: "🐢", t: "还有提升空间" };
       shell.panel.innerHTML = "";
-      shell.panel.appendChild(h("div", { class: "result-card" },
-        h("div", { class: "result-emoji" }, grade.e),
-        isBest ? h("div", { class: "new-best" }, "新纪录！") : null,
-        h("h3", null, grade.t),
-        h("div", { class: "big-num" }, avg + " ms"),
-        h("div", { class: "sub" }, "最快 " + fastest + " ms · 历史最佳 " + Store.get("best.reaction") + " ms"),
-        h("div", { class: "row center" },
-          h("button", { class: "btn", onclick: startReaction }, "再测一次"),
-          h("button", { class: "btn ghost", onclick: goHome }, "返回首页"))
-      ));
+      shell.panel.appendChild(resultCard({ emoji: grade.e, isBest: rec.isBest, title: grade.t, big: avg + " ms",
+        sub: "最快 " + fastest + " ms · " + diffName(diff) + "最佳 " + rec.best + " ms", onRetry: () => startReaction(diff) }));
     }
-
     showIntro();
     mount(shell.section);
     currentGame = { teardown() { clearTimeout(spawnTimer); } };
@@ -577,168 +471,138 @@
   /* ==========================================================
      4) 维度 · 空间旋转（心理旋转）
      ========================================================== */
-  function startSpatial() {
-    const game = meta("spatial");
-    const DURATION = 60;
-    let score = 0, streak = 0, best = Store.get("best.spatial", 0);
-    let timeLeft = DURATION, tickTimer = null, answered = false;
+  const SPATIAL_CFG = { easy: { size: 4 }, normal: { size: 5 }, hard: { size: 6 } };
+  // 多连块几何工具
+  const _key = (x, y) => x + "," + y;
+  function normalizePoly(cells) {
+    const minx = Math.min(...cells.map((c) => c[0])), miny = Math.min(...cells.map((c) => c[1]));
+    return cells.map((c) => [c[0] - minx, c[1] - miny]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  }
+  const rotPoly = (cells) => normalizePoly(cells.map(([x, y]) => [y, -x]));
+  const mirPoly = (cells) => normalizePoly(cells.map(([x, y]) => [-x, y]));
+  function canonPoly(cells) { let c = normalizePoly(cells), best = JSON.stringify(c); for (let i = 0; i < 3; i++) { c = rotPoly(c); const s = JSON.stringify(c); if (s < best) best = s; } return best; }
+  const chiralPoly = (cells) => canonPoly(cells) !== canonPoly(mirPoly(cells));
+  function randomPoly(size) {
+    const cells = [[0, 0]], set = new Set([_key(0, 0)]), dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    while (cells.length < size) { const b = pick(cells), d = pick(dirs), nx = b[0] + d[0], ny = b[1] + d[1]; if (!set.has(_key(nx, ny))) { set.add(_key(nx, ny)); cells.push([nx, ny]); } }
+    return normalizePoly(cells);
+  }
+  function rotN(cells, n) { let c = normalizePoly(cells); for (let i = 0; i < ((n % 4) + 4) % 4; i++) c = rotPoly(c); return c; }
+  function drawShape(cells, size, colorVar) {
+    const cv = h("canvas", { class: "sp-canvas", width: size, height: size }), ctx = cv.getContext("2d");
+    const gw = Math.max(...cells.map((c) => c[0])) + 1, gh = Math.max(...cells.map((c) => c[1])) + 1, pad = 14;
+    const cell = Math.floor(Math.min((size - pad * 2) / gw, (size - pad * 2) / gh));
+    const offx = (size - cell * gw) / 2, offy = (size - cell * gh) / 2;
+    const grad = ctx.createLinearGradient(0, 0, size, size); grad.addColorStop(0, colorVar[0]); grad.addColorStop(1, colorVar[1]);
+    cells.forEach(([x, y]) => { const px = offx + x * cell, py = offy + y * cell; ctx.fillStyle = grad; ctx.fillRect(px + 1, py + 1, cell - 2, cell - 2); ctx.strokeStyle = "rgba(255,255,255,.35)"; ctx.lineWidth = 1.5; ctx.strokeRect(px + 1.5, py + 1.5, cell - 3, cell - 3); });
+    return cv;
+  }
+  function startSpatial(diff) {
+    diff = diff || getDiff("spatial");
+    const game = meta("spatial"), cfg = SPATIAL_CFG[diff], POLY = cfg.size, DURATION = 60;
+    let score = 0, streak = 0, timeLeft = DURATION, tickTimer = null, answered = false;
 
     const scorePill = h("div", { class: "pill accent" }, "得分 ", h("b", null, "0"));
     const streakPill = h("div", { class: "pill" }, "连击 ", h("b", null, "0"));
     const timePill = h("div", { class: "pill" }, "⏱ ", h("b", null, DURATION + "s"));
-    const shell = gameShell(game, null, [scorePill, streakPill, timePill]);
+    const shell = gameShell(game, diff, [scorePill, streakPill, timePill]);
 
-    const bar = h("i");
-    const timebar = h("div", { class: "timebar" }, bar);
-    const wrap = h("div", { class: "sp-wrap" });
-
+    const bar = h("i"), timebar = h("div", { class: "timebar" }, bar), wrap = h("div", { class: "sp-wrap" });
     shell.panel.appendChild(h("p", { class: "hint" }, "上方是 ", h("b", null, "参考图形"), "。下面 4 个中只有 1 个是它 ", h("b", null, "旋转"), " 后的样子——其余是 ", h("b", null, "镜像"), " 或别的形状。选出正确的那个，", h("b", null, "60 秒"), " 冲刺高分！"));
-    shell.panel.appendChild(timebar);
-    shell.panel.appendChild(wrap);
-
-    /* ---- 多连块（polyomino）几何工具 ---- */
-    const key = (x, y) => x + "," + y;
-    function normalize(cells) {
-      const minx = Math.min(...cells.map((c) => c[0]));
-      const miny = Math.min(...cells.map((c) => c[1]));
-      return cells.map((c) => [c[0] - minx, c[1] - miny]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-    }
-    const rot = (cells) => normalize(cells.map(([x, y]) => [y, -x]));
-    const mir = (cells) => normalize(cells.map(([x, y]) => [-x, y]));
-    function canon(cells) {
-      let c = normalize(cells), best = JSON.stringify(c);
-      for (let i = 0; i < 3; i++) { c = rot(c); const s = JSON.stringify(c); if (s < best) best = s; }
-      return best;
-    }
-    const chiral = (cells) => canon(cells) !== canon(mir(cells));
-    function randomPoly(size) {
-      const cells = [[0, 0]]; const set = new Set([key(0, 0)]);
-      const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-      while (cells.length < size) {
-        const base = pick(cells); const d = pick(dirs);
-        const nx = base[0] + d[0], ny = base[1] + d[1];
-        if (!set.has(key(nx, ny))) { set.add(key(nx, ny)); cells.push([nx, ny]); }
-      }
-      return normalize(cells);
-    }
-    function rotN(cells, n) { let c = normalize(cells); for (let i = 0; i < ((n % 4) + 4) % 4; i++) c = rot(c); return c; }
-
-    function drawShape(cells, size, colorVar) {
-      const cv = h("canvas", { class: "sp-canvas", width: size, height: size });
-      const ctx = cv.getContext("2d");
-      const gw = Math.max(...cells.map((c) => c[0])) + 1;
-      const gh = Math.max(...cells.map((c) => c[1])) + 1;
-      const pad = 14;
-      const cell = Math.floor(Math.min((size - pad * 2) / gw, (size - pad * 2) / gh));
-      const offx = (size - cell * gw) / 2, offy = (size - cell * gh) / 2;
-      const grad = ctx.createLinearGradient(0, 0, size, size);
-      grad.addColorStop(0, colorVar[0]); grad.addColorStop(1, colorVar[1]);
-      cells.forEach(([x, y]) => {
-        const px = offx + x * cell, py = offy + y * cell;
-        ctx.fillStyle = grad;
-        ctx.fillRect(px + 1, py + 1, cell - 2, cell - 2);
-        ctx.strokeStyle = "rgba(255,255,255,.35)"; ctx.lineWidth = 1.5;
-        ctx.strokeRect(px + 1.5, py + 1.5, cell - 3, cell - 3);
-      });
-      return cv;
-    }
+    shell.panel.appendChild(timebar); shell.panel.appendChild(wrap);
 
     function nextRound() {
-      answered = false;
-      wrap.innerHTML = "";
-      // 生成手性图形作为参考
-      let ref;
-      do { ref = randomPoly(5); } while (!chiral(ref));
-      const refCanon = canon(ref);
-      const mirCanon = canon(mir(ref));
-
-      // 正确项：参考图的一个"真旋转"——外观必须与参考不同，强制玩家心理旋转
-      const refStr = JSON.stringify(normalize(ref));
+      answered = false; wrap.innerHTML = "";
+      let ref; do { ref = randomPoly(POLY); } while (!chiralPoly(ref));
+      const refCanon = canonPoly(ref), mirCanon = canonPoly(mirPoly(ref));
+      const refStr = JSON.stringify(normalizePoly(ref));
       const rotCand = [1, 2, 3].filter((k) => JSON.stringify(rotN(ref, k)) !== refStr);
       const correct = rotN(ref, rotCand.length ? pick(rotCand) : 1 + rand(3));
-      const trap = rotN(mir(ref), rand(4));          // 陷阱：镜像后旋转
-      // 两个无关形状（形状不同于参考，也不同于镜像，避免歧义）
-      const extras = [];
-      let guard = 0;
-      while (extras.length < 2 && guard++ < 200) {
-        const p = randomPoly(5);
-        const pc = canon(p);
-        if (pc === refCanon || pc === mirCanon) continue;
-        if (extras.some((e) => canon(e) === pc)) continue;
-        extras.push(rotN(p, rand(4)));
-      }
-      while (extras.length < 2) extras.push(rotN(randomPoly(4), rand(4))); // 兜底
-
-      const options = shuffle([
-        { cells: correct, correct: true },
-        { cells: trap, correct: false },
-        { cells: extras[0], correct: false },
-        { cells: extras[1], correct: false },
-      ]);
-
-      const ac = getComputedStyle(document.documentElement);
-      const accent = [ac.getPropertyValue("--spatial").trim() || "#40c4ff", ac.getPropertyValue("--spatial-2").trim() || "#2b8bff"];
-
-      // 参考区
-      wrap.appendChild(h("div", { class: "sp-ref" },
-        h("div", { class: "label" }, "参考图形"),
-        drawShape(ref, 150, accent)));
-
-      // 选项区
+      const trap = rotN(mirPoly(ref), rand(4));
+      const extras = []; let guard = 0;
+      while (extras.length < 2 && guard++ < 200) { const p = randomPoly(POLY), pc = canonPoly(p); if (pc === refCanon || pc === mirCanon) continue; if (extras.some((e) => canonPoly(e) === pc)) continue; extras.push(rotN(p, rand(4))); }
+      while (extras.length < 2) extras.push(rotN(randomPoly(Math.max(4, POLY - 1)), rand(4)));
+      const options = shuffle([{ cells: correct, correct: true }, { cells: trap, correct: false }, { cells: extras[0], correct: false }, { cells: extras[1], correct: false }]);
+      const cs = getComputedStyle(document.documentElement);
+      const accent = [cs.getPropertyValue("--spatial").trim() || "#40c4ff", cs.getPropertyValue("--spatial-2").trim() || "#2b8bff"];
+      wrap.appendChild(h("div", { class: "sp-ref" }, h("div", { class: "label" }, "参考图形"), drawShape(ref, 150, accent)));
       const optsEl = h("div", { class: "sp-options" });
-      options.forEach((opt) => {
-        const btn = h("button", { class: "sp-option", onclick: () => choose(btn, opt, options) },
-          drawShape(opt.cells, 130, ["#3a4675", "#2a3358"]));
-        optsEl.appendChild(btn);
-      });
+      options.forEach((opt) => optsEl.appendChild(h("button", { class: "sp-option", onclick: (e) => choose(e.currentTarget, opt, options) }, drawShape(opt.cells, 130, ["#3a4675", "#2a3358"]))));
       wrap.appendChild(optsEl);
     }
-
     function choose(btn, opt, options) {
-      if (answered) return;
-      answered = true;
-      const btns = [...btn.parentElement.children];
-      btns.forEach((b, i) => { b.disabled = true; if (options[i].correct) b.classList.add("correct"); });
-      if (opt.correct) {
-        const bonus = Math.min(streak, 8);
-        score += 10 + bonus * 2; streak++;
-        scorePill.querySelector("b").textContent = String(score);
-        streakPill.querySelector("b").textContent = String(streak);
-        Sound.good();
-      } else {
-        btn.classList.add("wrong");
-        streak = 0; streakPill.querySelector("b").textContent = "0";
-        Sound.bad();
-      }
+      if (answered) return; answered = true;
+      [...btn.parentElement.children].forEach((b, i) => { b.disabled = true; if (options[i].correct) b.classList.add("correct"); });
+      if (opt.correct) { const bonus = Math.min(streak, 8); score += 10 + bonus * 2; streak++; scorePill.querySelector("b").textContent = String(score); streakPill.querySelector("b").textContent = String(streak); Sound.good(); }
+      else { btn.classList.add("wrong"); streak = 0; streakPill.querySelector("b").textContent = "0"; Sound.bad(); }
       setTimeout(() => { if (timeLeft > 0) nextRound(); }, 720);
     }
-
-    function tick() {
-      timeLeft -= 0.1;
-      if (timeLeft <= 0) { timeLeft = 0; finish(); }
-      timePill.querySelector("b").textContent = Math.ceil(timeLeft) + "s";
-      bar.style.width = (timeLeft / DURATION * 100) + "%";
-    }
-
+    function tick() { timeLeft -= 0.1; if (timeLeft <= 0) { timeLeft = 0; finish(); } timePill.querySelector("b").textContent = Math.ceil(timeLeft) + "s"; bar.style.width = (timeLeft / DURATION * 100) + "%"; }
     function finish() {
       clearInterval(tickTimer); tickTimer = null;
-      const isBest = score > best;
-      if (isBest) { best = score; Store.set("best.spatial", score); }
+      const rec = recordBest("spatial", diff, score, false);
       shell.panel.innerHTML = "";
-      shell.panel.appendChild(h("div", { class: "result-card" },
-        h("div", { class: "result-emoji" }, score >= 120 ? "🏆" : score >= 60 ? "🎉" : "🔷"),
-        isBest && score > 0 ? h("div", { class: "new-best" }, "新纪录！") : null,
-        h("h3", null, "时间到！"),
-        h("div", { class: "big-num" }, String(score)),
-        h("div", { class: "sub" }, "历史最佳 " + best + " 分"),
-        h("div", { class: "row center" },
-          h("button", { class: "btn", onclick: startSpatial }, "再来一局"),
-          h("button", { class: "btn ghost", onclick: goHome }, "返回首页"))
-      ));
+      shell.panel.appendChild(resultCard({ emoji: score >= 120 ? "🏆" : score >= 60 ? "🎉" : "🔷", isBest: rec.isBest && score > 0,
+        title: "时间到！", big: String(score), sub: diffName(diff) + "最佳 " + (rec.best || 0) + " 分", onRetry: () => startSpatial(diff) }));
     }
+    nextRound(); tickTimer = setInterval(tick, 100);
+    mount(shell.section);
+    currentGame = { teardown() { clearInterval(tickTimer); } };
+  }
 
-    nextRound();
-    tickTimer = setInterval(tick, 100);
+  /* ==========================================================
+     5) 综合 · 舒尔特方格（Schulte Table）
+     ========================================================== */
+  const SCHULTE_CFG = { easy: { n: 3 }, normal: { n: 4 }, hard: { n: 5 } };
+  function startSchulte(diff) {
+    diff = diff || getDiff("schulte");
+    const game = meta("schulte"), cfg = SCHULTE_CFG[diff], N = cfg.n, TOTAL = N * N;
+    let next = 1, penalty = 0, startAt = 0, tickTimer = null, running = false, finished = false;
+
+    const nextPill = h("div", { class: "pill accent" }, "下一个 ", h("b", null, "1"));
+    const timePill = h("div", { class: "pill" }, "⏱ ", h("b", null, "0.0s"));
+    const bp = bestPillEl(game, diff);
+    const shell = gameShell(game, diff, [nextPill, timePill, bp]);
+
+    shell.panel.appendChild(h("p", { class: "hint" }, "按 ", h("b", null, "1 → " + TOTAL), " 的顺序依次点击方格，", h("b", null, "越快越好"), "。点错会闪红并加时 0.5 秒。建议目光盯住中心，用余光搜索——这正是训练所在。"));
+
+    const grid = h("div", { class: "schulte-grid", style: { gridTemplateColumns: "repeat(" + N + ", 1fr)" } });
+    const nums = shuffle(Array.from({ length: TOTAL }, (_, i) => i + 1));
+    const cells = [];
+    nums.forEach((val) => {
+      const cell = h("button", { class: "schulte-cell", onclick: () => onCell(val, cell) }, String(val));
+      cells.push({ val, el: cell }); grid.appendChild(cell);
+    });
+    shell.panel.appendChild(grid);
+
+    const overlay = h("div", { class: "schulte-overlay" },
+      h("div", null, h("h3", null, N + " × " + N + " 方格"), h("p", null, "点击任意处开始计时"),
+        h("button", { class: "btn mt", onclick: start }, "开始 ▶")));
+    grid.appendChild(overlay);
+
+    function start() { if (running) return; running = true; overlay.remove(); startAt = performance.now(); tickTimer = setInterval(tick, 100); }
+    function tick() { const t = (performance.now() - startAt) / 1000 + penalty; timePill.querySelector("b").textContent = t.toFixed(1) + "s"; }
+    function onCell(val, el) {
+      if (!running || finished) return;
+      if (val === next) {
+        el.classList.add("done"); el.disabled = true; next++;
+        nextPill.querySelector("b").textContent = next > TOTAL ? "✓" : String(next);
+        Sound.pop();
+        if (next > TOTAL) finish();
+      } else {
+        penalty += 0.5; el.classList.remove("shake"); void el.offsetWidth; el.classList.add("shake"); Sound.bad();
+      }
+    }
+    function finish() {
+      finished = true; clearInterval(tickTimer); tickTimer = null; Sound.win();
+      const ms = Math.round(performance.now() - startAt + penalty * 1000);
+      const rec = recordBest("schulte", diff, ms, true);
+      if (rec.isBest) bp.querySelector("b").textContent = (ms / 1000).toFixed(1) + " 秒";
+      shell.panel.innerHTML = "";
+      shell.panel.appendChild(resultCard({ emoji: "🎯", isBest: rec.isBest, title: "全部找到！",
+        big: (ms / 1000).toFixed(1) + " 秒", sub: (penalty ? "含点错加时 " + penalty.toFixed(1) + "s · " : "") + diffName(diff) + "最佳 " + (rec.best / 1000).toFixed(1) + " 秒",
+        onRetry: () => startSchulte(diff) }));
+    }
     mount(shell.section);
     currentGame = { teardown() { clearInterval(tickTimer); } };
   }
