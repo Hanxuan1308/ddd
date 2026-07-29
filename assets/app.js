@@ -19,7 +19,7 @@
         if (v == null || v === false) continue;
         if (k === "class") el.className = v;
         else if (k === "html") el.innerHTML = v;
-        else if (k === "style" && typeof v === "object") Object.assign(el.style, v);
+        else if (k === "style" && typeof v === "object") { for (const p in v) { if (p.startsWith("--")) el.style.setProperty(p, v[p]); else el.style[p] = v[p]; } }
         else if (k.startsWith("on") && typeof v === "function")
           el.addEventListener(k.slice(2).toLowerCase(), v);
         else if (k in el && k !== "list") { try { el[k] = v; } catch (_) { el.setAttribute(k, v); } }
@@ -208,6 +208,13 @@
     return h("div", { class: "pill accent" }, "最佳 ", h("b", null, b == null ? "—" : game.bestLabel(b)));
   }
 
+  // 折叠式玩法说明：一句话目标常驻，详细规则点开才显示（默认收起，减少一屏文字）
+  function howto(goal, ...detail) {
+    return h("details", { class: "howto" },
+      h("summary", null, h("span", { class: "howto-goal" }, goal), h("span", { class: "howto-more" }, "玩法说明")),
+      h("div", { class: "howto-body" }, ...detail));
+  }
+
   // 通用结算卡
   function resultCard(opts) {
     return h("div", { class: "result-card" },
@@ -237,7 +244,7 @@
     const cfg = REASON_CFG[diff], COLORS = cfg.colors, SLOTS = cfg.slots, MAX_TRIES = cfg.tries;
     const secret = Array.from({ length: SLOTS }, () => rand(COLORS));
 
-    let attempt = 0, current = Array(SLOTS).fill(-1), selColor = 0, done = false;
+    let attempt = 0, current = Array(SLOTS).fill(-1), done = false;
     const history = [];
 
     const triesPill = h("div", { class: "pill" }, "剩余 ", h("b", null, String(MAX_TRIES)));
@@ -249,11 +256,13 @@
     const submitBtn = h("button", { class: "btn", disabled: true, onclick: submit }, "确认这一行");
     const statusEl = h("div", { class: "center mt", style: { minHeight: "24px", color: "var(--muted)" } });
 
-    shell.panel.appendChild(h("p", { class: "hint" },
-      "我随机生成了一个由 ", h("b", null, SLOTS + " 个颜色"), " 组成的密码（颜色可重复，共 " + COLORS + " 种）。选颜色填满一行后点确认，我会给出提示：",
-      h("b", null, " ●实心 "), "= 颜色和位置都对；",
-      h("b", null, " ○空心 "), "= 颜色对但位置错。共 ", h("b", null, String(MAX_TRIES)), " 次机会。"));
+    shell.panel.appendChild(howto(
+      "点下方颜色依次填入这一行 → 点「确认」，按提示推出密码",
+      "密码由 ", h("b", null, SLOTS + " 个颜色"), " 组成（可重复，共 " + COLORS + " 种）。每次确认后，右侧给出提示：",
+      h("b", null, "●实心"), " = 有一处颜色和位置都对；",
+      h("b", null, "○空心"), " = 有一处颜色对但位置不对。共 ", h("b", null, String(MAX_TRIES)), " 次机会。点已填的圆点可清除重填。"));
     shell.panel.appendChild(boardEl);
+    shell.panel.appendChild(h("div", { class: "palette-label" }, "👇 点颜色填入"));
     shell.panel.appendChild(paletteEl);
     shell.panel.appendChild(h("div", { class: "row center mt" }, submitBtn, h("button", { class: "btn ghost", onclick: clearRow }, "清空")));
     shell.panel.appendChild(statusEl);
@@ -261,19 +270,20 @@
     function buildPalette() {
       paletteEl.innerHTML = "";
       for (let c = 0; c < COLORS; c++)
-        paletteEl.appendChild(h("div", { class: "swatch color-" + c + (c === selColor ? " active" : ""), title: "颜色 " + (c + 1),
-          onclick: () => { selColor = c; buildPalette(); Sound.click(); } }));
+        paletteEl.appendChild(h("div", { class: "swatch color-" + c, title: "填入颜色 " + (c + 1), onclick: () => fillNext(c) }));
     }
     function renderBoard() {
       boardEl.innerHTML = "";
-      for (let r = 0; r < MAX_TRIES; r++) {
+      // 只渲染「已猜的历史 + 当前这一行」，避免一上来就是 10 行空格把调色板挤到屏幕外
+      const rowCount = done ? attempt : attempt + 1;
+      for (let r = 0; r < rowCount; r++) {
         const isCurrent = r === attempt && !done;
         const row = h("div", { class: "mm-row" + (isCurrent ? " current" : "") }, h("div", { class: "mm-idx" }, String(r + 1)));
         const pegs = h("div", { class: "mm-pegs" });
         const gd = history[r];
         for (let s = 0; s < SLOTS; s++) {
           const colorIdx = gd ? gd.guess[s] : (isCurrent ? current[s] : -1);
-          pegs.appendChild(h("div", { class: "peg " + (colorIdx >= 0 ? "color-" + colorIdx : "color-empty"), onclick: isCurrent ? () => setSlot(s) : null }));
+          pegs.appendChild(h("div", { class: "peg " + (colorIdx >= 0 ? "color-" + colorIdx : "color-empty"), onclick: isCurrent ? () => clearSlot(s) : null }));
         }
         row.appendChild(pegs);
         const fb = h("div", { class: "mm-feedback" });
@@ -286,7 +296,8 @@
         boardEl.appendChild(row);
       }
     }
-    function setSlot(s) { if (done) return; current[s] = selColor; Sound.click(); updateSubmit(); renderBoard(); }
+    function fillNext(c) { if (done) return; const i = current.indexOf(-1); if (i < 0) return; current[i] = c; Sound.click(); updateSubmit(); renderBoard(); }
+    function clearSlot(s) { if (done || current[s] < 0) return; current[s] = -1; Sound.click(); updateSubmit(); renderBoard(); }
     function clearRow() { if (done) return; current = Array(SLOTS).fill(-1); updateSubmit(); renderBoard(); }
     function updateSubmit() { submitBtn.disabled = current.some((c) => c < 0); }
     function evaluate(guess) {
@@ -370,7 +381,9 @@
     const displayEl = h("div", { class: "seq-display" });
     const subEl = h("div", { class: "seq-sub" });
     const optionsEl = h("div", { class: "seq-options" });
-    shell.panel.appendChild(h("p", { class: "hint" }, "找出数字之间的 ", h("b", null, "规律"), "，选出问号处应该填的数。答对得分并累积连击，", h("b", null, DURATION + " 秒"), " 内挑战最高分！"));
+    shell.panel.appendChild(howto(
+      "找规律，选出问号处应填的数字",
+      "答对得分并累积连击，", h("b", null, DURATION + " 秒"), " 内挑战最高分。规律包含等差、等比、斐波那契、平方、交替等（难度越高越复杂）。"));
     shell.panel.appendChild(timebar); shell.panel.appendChild(displayEl); shell.panel.appendChild(subEl); shell.panel.appendChild(optionsEl);
 
     function nextRound() {
@@ -430,7 +443,9 @@
     const bp = bestPillEl(game, diff);
     const shell = gameShell(game, diff, [roundPill, lastPill, bp]);
 
-    shell.panel.appendChild(h("p", { class: "hint" }, "点击 “开始” 后，", h("b", null, "⚡目标"), " 会在随机延迟后出现在场内任意位置——", h("b", null, "看到就立刻点它！"), " 共 ", h("b", null, ROUNDS + " 个"), "，统计平均反应毫秒数（越小越强）。抢跑会重来哦。"));
+    shell.panel.appendChild(howto(
+      "⚡ 目标一出现就立刻点它，测你的反应速度",
+      "点「开始」后，目标会在随机延迟后出现在场内任意位置。共 ", h("b", null, ROUNDS + " 个"), "，统计平均反应毫秒数（越小越强）。目标出现前抢先点会判定抢跑，需重新等待。"));
     const arena = h("div", { class: "react-arena", onpointerdown: onArenaDown });
     const center = h("div", { class: "react-center" });
     arena.appendChild(center); shell.panel.appendChild(arena);
@@ -528,7 +543,9 @@
     const shell = gameShell(game, diff, [scorePill, streakPill, timePill]);
 
     const bar = h("i"), timebar = h("div", { class: "timebar" }, bar), wrap = h("div", { class: "sp-wrap" });
-    shell.panel.appendChild(h("p", { class: "hint" }, "上方是 ", h("b", null, "参考图形"), "。下面 4 个中只有 1 个是它 ", h("b", null, "旋转"), " 后的样子——其余是 ", h("b", null, "镜像"), " 或别的形状。选出正确的那个，", h("b", null, "60 秒"), " 冲刺高分！"));
+    shell.panel.appendChild(howto(
+      "选出参考图「旋转后」的那个（避开镜像陷阱）",
+      "上方是参考图形，下面 4 个里只有 1 个是它旋转后的样子，其余是镜像或别的形状。", h("b", null, "60 秒"), " 内答对越多越好。"));
     shell.panel.appendChild(timebar); shell.panel.appendChild(wrap);
 
     function nextRound() {
@@ -584,7 +601,9 @@
     const bp = bestPillEl(game, diff);
     const shell = gameShell(game, diff, [nextPill, timePill, bp]);
 
-    shell.panel.appendChild(h("p", { class: "hint" }, "按 ", h("b", null, "1 → " + TOTAL), " 的顺序依次点击方格，", h("b", null, "越快越好"), "。点错会闪红并加时 0.5 秒。建议目光盯住中心，用余光搜索——这正是训练所在。"));
+    shell.panel.appendChild(howto(
+      "按 1 → " + TOTAL + " 的顺序依次点方格，越快越好",
+      "点错会闪红并加时 0.5 秒。小技巧：目光盯住中心、用余光去搜索数字——这正是训练所在。"));
 
     const grid = h("div", { class: "schulte-grid", style: { gridTemplateColumns: "repeat(" + N + ", 1fr)" } });
     const nums = shuffle(Array.from({ length: TOTAL }, (_, i) => i + 1));
