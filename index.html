@@ -6,6 +6,15 @@
   <meta name="theme-color" content="#0f1220" />
   <title>脑力训练场 · NeuroArena</title>
   <meta name="description" content="2048 · 连线 · 扫雷 · 记忆翻牌 四合一经典小游戏合集" />
+
+  <!-- PWA：可「添加到主屏幕」，像原生 App 一样全屏 + 离线 -->
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="脑力训练场" />
+
   <link rel="stylesheet" href="assets/style.css" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>" />
   <script>
@@ -48,5 +57,11 @@
   </footer>
 
   <script src="assets/app.js"></script>
+  <script>
+    /* 注册 Service Worker（仅在 https/localhost 生效，file:// 会静默失败） */
+    if ("serviceWorker" in navigator) {
+      addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+    }
+  </script>
 </body>
 </html>

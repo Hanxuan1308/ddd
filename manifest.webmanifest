@@ -1,0 +1,17 @@
+{
+  "name": "脑力训练场",
+  "short_name": "脑力训练场",
+  "description": "2048 · 连线 · 扫雷 · 记忆翻牌 —— 益智小游戏合集",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f1220",
+  "theme_color": "#0f1220",
+  "lang": "zh-CN",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
