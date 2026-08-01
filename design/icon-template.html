@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>App 图标设计模版 · 脑力训练场</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 28px 60px;
+    background: #06070f;
+    color: #e8ecff;
+    font-family: "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  h1 { font-size: 22px; margin: 0 0 6px; letter-spacing: .5px; }
+  .sub { color: #7f88ad; font-size: 13px; margin: 0 0 28px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; max-width: 1100px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+  .card {
+    background: linear-gradient(160deg, #101528 0%, #0a0d1a 100%);
+    border: 1px solid #1e2540; border-radius: 18px; padding: 18px 18px 16px;
+  }
+  .tag {
+    display: inline-block; font-size: 11px; letter-spacing: 1.5px; color: #6ee7ff;
+    background: rgba(34,211,238,.10); border: 1px solid rgba(34,211,238,.25);
+    padding: 3px 9px; border-radius: 999px; margin-bottom: 12px;
+  }
+  .big { width: 100%; aspect-ratio: 1/1; border-radius: 22%; overflow: hidden; display: block; }
+  .name { font-size: 15px; font-weight: 700; margin: 14px 0 3px; }
+  .desc { font-size: 12px; color: #7f88ad; line-height: 1.6; margin: 0 0 12px; min-height: 32px; }
+  .row { display: flex; align-items: center; gap: 12px; }
+  .chip { padding: 8px; border-radius: 14px; display: flex; align-items: center; gap: 8px; }
+  .chip.dark { background: #14182b; }
+  .chip.light { background: #e9ecf5; }
+  .mini { width: 54px; height: 54px; border-radius: 24%; overflow: hidden; display: block; }
+  .tiny { width: 30px; height: 30px; border-radius: 24%; overflow: hidden; display: block; }
+  .cap { font-size: 10px; color: #6b7495; }
+</style>
+</head>
+<body>
+  <h1>App 图标设计模版</h1>
+  <p class="sub">科技风 / 高级感 —— 深空底 + 冷光渐变 + 精确几何。每个方案下方是真实小尺寸预览（54px / 30px），用来检查缩到手机桌面上是否还清晰。</p>
+  <div class="grid" id="grid"></div>
+
+<script src="icon-lib.js"></script>
+<script>
+const grid = document.getElementById("grid");
+NA_ICONS.ICONS.forEach((ic, i) => {
+  const p = "i" + i + "_";
+  const card = document.createElement("div");
+  card.className = "card";
+  card.innerHTML = `
+    <span class="tag">${String(i+1).padStart(2,"0")} \u00b7 ${ic.tag}</span>
+    <div class="big">${NA_ICONS.render(ic.id, p)}</div>
+    <div class="name">${ic.name}</div>
+    <p class="desc">${ic.desc}</p>
+    <div class="row">
+      <div class="chip dark"><div class="mini">${NA_ICONS.render(ic.id, p+"d")}</div><div class="tiny">${NA_ICONS.render(ic.id, p+"t")}</div><span class="cap">\u6df1\u8272\u684c\u9762</span></div>
+      <div class="chip light"><div class="mini">${NA_ICONS.render(ic.id, p+"l")}</div><span class="cap">\u6d45\u8272\u684c\u9762</span></div>
+    </div>`;
+  grid.appendChild(card);
+});
+</script>
+</body>
+</html>

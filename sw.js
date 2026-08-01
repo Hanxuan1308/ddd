@@ -1,5 +1,5 @@
 /* 简单的离线缓存 Service Worker —— 让「添加到主屏幕」后可离线游玩 */
-const CACHE = "naoli-v1";
+const CACHE = "naoli-v2";
 const ASSETS = [
   ".",
   "index.html",
@@ -8,7 +8,9 @@ const ASSETS = [
   "manifest.webmanifest",
   "icon-192.png",
   "icon-512.png",
+  "icon-512-maskable.png",
   "apple-touch-icon.png",
+  "favicon.png",
 ];
 
 self.addEventListener("install", (e) => {
