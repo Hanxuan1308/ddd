@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#0f1220" />
+<title>商业成长模拟器 · 第一阶段：汉堡店</title>
+<meta name="description" content="从一家汉堡店起步，用定价、进货、广告与升级决策，在真实的现金流与顾客反馈中经营成长 —— 商业成长模拟器 第一阶段原型。" />
+<script>
+  /* 首帧前应用主题，避免闪烁 */
+  try {
+    var _t = localStorage.getItem("bgs_theme");
+    _t = _t ? JSON.parse(_t) : (window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    document.documentElement.setAttribute("data-theme", _t);
+  } catch (e) { document.documentElement.setAttribute("data-theme", "dark"); }
+</script>
+<style>
+:root{
+  --bg:#0f1220; --bg-soft:#161a2e; --panel:#1b2038; --panel-2:#222847; --line:#2c3355;
+  --text:#eef1ff; --muted:#9aa3c7; --muted-2:#6f78a0;
+  --accent:#f5a623; --accent-2:#f97316;      /* 商业金 → 橙 */
+  --good:#35d07f; --bad:#ff5d6c; --warn:#ffc857; --blue:#40c4ff;
+  --ring:rgba(255,255,255,.14); --overlay-bg:rgba(15,18,32,.82);
+  --radius:18px; --radius-sm:12px; --shadow:0 18px 45px rgba(0,0,0,.45);
+  --ease:cubic-bezier(.22,.61,.36,1);
+}
+:root[data-theme="light"]{
+  --bg:#eef1f8; --bg-soft:#ffffff; --panel:#ffffff; --panel-2:#eef1f8; --line:#dbe0ee;
+  --text:#1b2138; --muted:#5c6486; --muted-2:#8991af;
+  --ring:rgba(20,26,54,.16); --shadow:0 18px 45px rgba(38,50,90,.16); --overlay-bg:rgba(20,26,54,.55);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;min-height:100%}
+body{
+  font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  background:radial-gradient(1200px 800px at 15% -10%,#2a1f10 0%,var(--bg) 55%),
+             radial-gradient(900px 700px at 110% 10%,#1b2233 0%,transparent 60%),var(--bg);
+  color:var(--text); min-height:100vh; display:flex; flex-direction:column;
+  -webkit-tap-highlight-color:transparent; overflow-x:hidden;
+}
+:root[data-theme="light"] body{
+  background:radial-gradient(1200px 800px at 15% -10%,#fbf1df 0%,var(--bg) 55%),
+             radial-gradient(900px 700px at 110% 10%,#eaf0ff 0%,transparent 60%),var(--bg);
+}
+.bg-orbs{position:fixed;inset:0;z-index:0;pointer-events:none;filter:blur(60px);opacity:.5}
+:root[data-theme="light"] .bg-orbs{opacity:.22}
+.orb{position:absolute;border-radius:50%}
+.orb-1{width:340px;height:340px;top:-80px;left:-60px;background:#f5a623;opacity:.30}
+.orb-2{width:300px;height:300px;bottom:-100px;right:-60px;background:#17a877;opacity:.24}
+.orb-3{width:260px;height:260px;top:40%;left:60%;background:#f97316;opacity:.20}
+
+/* 头部 */
+.app-header{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;padding:16px clamp(16px,4vw,40px);gap:12px}
+.brand{display:flex;align-items:center;gap:12px}
+.brand-logo{font-size:30px;line-height:1;filter:drop-shadow(0 4px 10px rgba(245,166,35,.5))}
+.brand-text{display:flex;flex-direction:column}
+.brand-text strong{font-size:18px;letter-spacing:.5px}
+.brand-text small{color:var(--muted);font-size:11px;letter-spacing:.5px}
+.header-actions{display:flex;gap:10px}
+.icon-btn{background:var(--panel);border:1px solid var(--line);color:var(--text);width:42px;height:42px;border-radius:12px;font-size:18px;cursor:pointer;transition:transform .15s var(--ease),background .2s}
+.icon-btn:hover{background:var(--panel-2);transform:translateY(-1px)}
+.icon-btn:active{transform:translateY(0) scale(.96)}
+
+.app-main{position:relative;z-index:1;flex:1;width:100%;max-width:1000px;margin:0 auto;padding:8px clamp(16px,4vw,40px) 32px}
+.app-footer{position:relative;z-index:1;text-align:center;color:var(--muted-2);font-size:12px;padding:14px}
+
+/* 顶部状态药丸 */
+.stat-pills{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 18px}
+.pill{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:13px;color:var(--muted);display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.pill b{color:var(--text);font-variant-numeric:tabular-nums;font-size:14.5px}
+.pill.money b{color:var(--good)} .pill.brand b{color:var(--accent)} .pill.val b{color:var(--blue)}
+.pill .lbl{opacity:.85}
+
+.panel{background:linear-gradient(160deg,var(--panel) 0%,var(--bg-soft) 100%);border:1px solid var(--line);border-radius:var(--radius);padding:clamp(16px,3vw,24px);margin-bottom:18px;min-width:0}
+.panel h3{margin:0 0 14px;font-size:17px;display:flex;align-items:center;gap:8px}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+.grid2>div{min-width:0}
+@media(max-width:760px){.grid2{grid-template-columns:minmax(0,1fr)}}
+
+/* 说明折叠 */
+.howto{margin:0 0 18px;border:1px solid var(--line);border-radius:14px;background:var(--bg-soft)}
+.howto>summary{list-style:none;cursor:pointer;padding:13px 16px;display:flex;align-items:center;gap:12px}
+.howto>summary::-webkit-details-marker{display:none}
+.howto-goal{flex:1;color:var(--text);font-weight:600;font-size:14.5px;line-height:1.5}
+.howto-more{color:var(--accent);font-size:12.5px;white-space:nowrap}
+.howto-more::after{content:"▾";margin-left:4px}
+.howto[open] .howto-more::after{content:"▴"}
+.howto-body{padding:2px 16px 15px;color:var(--muted);font-size:13.5px;line-height:1.75}
+.howto-body b{color:var(--text)}
+.howto-body ul{margin:8px 0;padding-left:20px}
+
+/* 情报卡 */
+.intel{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}
+.intel-item{flex:1;min-width:130px;background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.intel-item .k{color:var(--muted);font-size:12px;margin-bottom:4px}
+.intel-item .v{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:6px}
+
+/* 决策控件 */
+.ctrl{margin-bottom:18px}
+.ctrl:last-child{margin-bottom:0}
+.ctrl-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.ctrl-head .name{font-weight:600;font-size:14.5px}
+.ctrl-head .hintx{color:var(--muted);font-size:12px}
+.ctrl-val{color:var(--accent);font-weight:800;font-variant-numeric:tabular-nums;font-size:16px}
+.stepper{display:flex;align-items:center;gap:10px}
+.stepper input[type=range]{flex:1;accent-color:var(--accent);height:26px}
+.stepbtns{display:flex;gap:6px}
+.mini{width:40px;height:40px;border-radius:11px;border:1px solid var(--line);background:var(--panel-2);color:var(--text);font-size:20px;font-weight:700;cursor:pointer;line-height:1;display:grid;place-items:center;transition:transform .12s,background .2s}
+.mini:hover{background:var(--panel);transform:translateY(-1px)}
+.mini:active{transform:scale(.94)}
+.mini:disabled{opacity:.4;cursor:not-allowed}
+.subnote{color:var(--muted);font-size:12.5px;margin-top:6px;line-height:1.5}
+.subnote b{color:var(--text)}
+
+/* 升级项 */
+.upgrades{display:flex;flex-direction:column;gap:10px}
+.upg{display:flex;align-items:center;gap:12px;background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.upg .ico{font-size:24px}
+.upg .info{flex:1}
+.upg .info b{font-size:14.5px}
+.upg .info div{color:var(--muted);font-size:12px;margin-top:2px}
+
+.btn{border:none;border-radius:12px;padding:12px 20px;cursor:pointer;font-size:15px;font-weight:700;color:#fff;background:linear-gradient(150deg,var(--accent) 0%,var(--accent-2) 100%);box-shadow:0 10px 22px -10px var(--accent);transition:transform .15s var(--ease),filter .2s,opacity .2s}
+.btn:hover{filter:brightness(1.08);transform:translateY(-1px)}
+.btn:active{transform:translateY(0) scale(.98)}
+.btn:disabled{opacity:.45;cursor:not-allowed;filter:none;transform:none}
+.btn.ghost{background:var(--panel-2);box-shadow:none;color:var(--text);border:1px solid var(--line)}
+.btn.sm{padding:9px 14px;font-size:13.5px}
+.btn.block{width:100%;padding:15px;font-size:16.5px}
+
+/* 数据表 */
+.table-wrap{overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:460px}
+th,td{padding:9px 10px;text-align:right;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;white-space:nowrap}
+th{color:var(--muted);font-weight:600;font-size:12px}
+th:first-child,td:first-child{text-align:left}
+tbody tr:last-child td{border-bottom:none}
+.pos{color:var(--good)} .neg{color:var(--bad)}
+.empty{color:var(--muted-2);text-align:center;padding:18px}
+
+/* 结算行 */
+.pl-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed var(--line);font-size:14px}
+.pl-row:last-child{border-bottom:none}
+.pl-row .amt{font-variant-numeric:tabular-nums;font-weight:600}
+.pl-total{margin-top:8px;padding-top:10px;border-top:2px solid var(--line);font-size:16px;font-weight:800}
+
+/* 遮罩 */
+.overlay{position:fixed;inset:0;background:var(--overlay-bg);backdrop-filter:blur(4px);z-index:60;display:grid;place-items:center;padding:20px;animation:fade .25s var(--ease)}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.modal{width:100%;max-width:460px;background:linear-gradient(160deg,var(--panel) 0%,var(--bg-soft) 100%);border:1px solid var(--line);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow);animation:pop .3s var(--ease)}
+@keyframes pop{from{transform:translateY(14px) scale(.97);opacity:0}to{transform:none;opacity:1}}
+.modal h2{margin:0 0 4px;font-size:22px;text-align:center}
+.modal .day-badge{text-align:center;color:var(--muted);font-size:13px;margin-bottom:16px}
+.metric-chips{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:14px 0 4px}
+.chip{background:var(--bg-soft);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:12.5px;color:var(--muted)}
+.chip b{font-variant-numeric:tabular-nums}
+.result-emoji{font-size:50px;text-align:center;margin-bottom:4px}
+.big-num{font-size:40px;font-weight:800;text-align:center;font-variant-numeric:tabular-nums}
+.event-banner{background:var(--bg-soft);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;padding:10px 14px;font-size:13.5px;color:var(--muted);margin-bottom:14px}
+.event-banner b{color:var(--text)}
+
+.toast{position:fixed;left:50%;bottom:34px;transform:translateX(-50%) translateY(20px);background:var(--panel-2);border:1px solid var(--line);color:var(--text);padding:12px 20px;border-radius:12px;font-size:14px;z-index:80;opacity:0;pointer-events:none;transition:opacity .3s,transform .3s;box-shadow:var(--shadow)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+.center{text-align:center}
+.mt{margin-top:16px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row.center{justify-content:center}
+.tiny{color:var(--muted-2);font-size:12px}
+.bar{height:7px;background:var(--panel-2);border-radius:999px;overflow:hidden;margin-top:6px}
+.bar>i{display:block;height:100%;border-radius:999px;transition:width .4s var(--ease)}
+</style>
+</head>
+<body>
+<div class="bg-orbs" aria-hidden="true"><span class="orb orb-1"></span><span class="orb orb-2"></span><span class="orb orb-3"></span></div>
+
+<header class="app-header">
+  <div class="brand">
+    <span class="brand-logo">🍔</span>
+    <span class="brand-text"><strong>商业成长模拟器</strong><small>第一阶段 · 汉堡店经营</small></span>
+  </div>
+  <div class="header-actions">
+    <button class="icon-btn" id="btn-theme" title="切换主题">🌙</button>
+    <button class="icon-btn" id="btn-restart" title="重新开始">🔄</button>
+  </div>
+</header>
+
+<main class="app-main">
+  <div class="stat-pills" id="pills"></div>
+
+  <details class="howto">
+    <summary>
+      <span class="howto-goal">🎯 目标：从一家汉堡店起步，用经营决策把 <b>企业估值</b> 做到 <b>¥20000</b>（或坚持到第 30 天）——现金为负即破产。</span>
+      <span class="howto-more">玩法</span>
+    </summary>
+    <div class="howto-body">
+      每天开门前，你会拿到一份<b>今日情报</b>（天气客流、原料价格），据此做四类决策：
+      <ul>
+        <li><b>定价</b>：价格越高毛利越大，但客流会下降、满意度受"性价比"影响。</li>
+        <li><b>进货</b>：备货不足会售罄流失顾客；备货过多会产生<b>损耗</b>（库存周转的代价）。</li>
+        <li><b>广告</b>：提升当日客流并长期积累<b>品牌</b>，但要算得过投入产出。</li>
+        <li><b>升级/雇人</b>：提高<b>产能</b>上限；产能不足会因排队流失顾客并拉低满意度。</li>
+      </ul>
+      点「开门营业」后结算当天损益，<b>满意度</b>与<b>品牌</b>会随服务质量涨跌，进而影响明天的客流。
+      系统不直接给答案——从每天的数据里找原因、优化策略，正是商业思维的训练。
+    </div>
+  </details>
+
+  <div class="grid2">
+    <!-- 决策区 -->
+    <div>
+      <div class="panel">
+        <h3>📅 <span id="day-title">第 1 天 · 今日情报</span></h3>
+        <div class="intel" id="intel"></div>
+
+        <div class="ctrl">
+          <div class="ctrl-head"><span class="name">🍔 汉堡定价</span><span class="ctrl-val" id="price-val">¥12</span></div>
+          <div class="stepper">
+            <input type="range" id="price" min="6" max="25" step="1" value="12" />
+          </div>
+          <div class="subnote" id="price-note"></div>
+        </div>
+
+        <div class="ctrl">
+          <div class="ctrl-head"><span class="name">📦 今日进货</span><span class="ctrl-val" id="buy-val">0 份</span></div>
+          <div class="stepper">
+            <input type="range" id="buy" min="0" max="200" step="5" value="0" />
+          </div>
+          <div class="subnote" id="buy-note"></div>
+        </div>
+
+        <div class="ctrl">
+          <div class="ctrl-head"><span class="name">📣 广告投入</span><span class="ctrl-val" id="ad-val">¥0</span></div>
+          <div class="stepper">
+            <input type="range" id="ad" min="0" max="600" step="25" value="0" />
+          </div>
+          <div class="subnote" id="ad-note"></div>
+        </div>
+
+        <button class="btn block mt" id="btn-open">开门营业 →</button>
+      </div>
+
+      <div class="panel">
+        <h3>🏗️ 一次性升级</h3>
+        <div class="upgrades" id="upgrades"></div>
+      </div>
+    </div>
+
+    <!-- 状态 + 数据区 -->
+    <div>
+      <div class="panel">
+        <h3>🏪 店铺状态</h3>
+        <div id="status-body"></div>
+      </div>
+
+      <div class="panel">
+        <h3>📊 经营数据（近 10 天）</h3>
+        <div class="table-wrap">
+          <table id="ledger">
+            <thead><tr><th>天</th><th>售出</th><th>收入</th><th>成本</th><th>净利</th><th>现金</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="subnote mt" id="ledger-note"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="app-footer">商业成长模拟器 · 第一阶段原型 —— 边玩边学商业 🍔</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ============================================================
+   商业成长模拟器 · 第一阶段：汉堡店
+   纯前端、零依赖的经营模拟。核心是"决策 → 反馈 → 复盘"闭环。
+   ============================================================ */
+
+const $ = (s)=>document.querySelector(s);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const yuan=(n)=>"¥"+Math.round(n).toLocaleString("zh-CN");
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const pick=(arr)=>arr[Math.floor(Math.random()*arr.length)];
+
+/* ---------- 常量（可平衡性调参） ---------- */
+const START = { cash:2000, brand:8, satis:75, price:12, invent:0, equip:1, staff:0 };
+const RENT = 120;            // 每日房租
+const WAGE = 80;             // 每名员工日薪
+const BASE_CAP = 40;         // 自营基础产能
+const CAP_PER_EQUIP = 25;    // 每级设备增加产能
+const CAP_PER_STAFF = 30;    // 每名员工增加产能
+const SPOIL_RATE = 0.15;     // 隔夜库存损耗率
+const WIN_VAL = 20000;       // 估值达标
+const MAX_DAY = 30;          // 天数上限
+
+const WEATHERS = [
+  {name:"晴天",   icon:"☀️", f:1.30},
+  {name:"多云",   icon:"⛅", f:1.05},
+  {name:"阴天",   icon:"☁️", f:0.92},
+  {name:"小雨",   icon:"🌧️", f:0.75},
+  {name:"大雨",   icon:"⛈️", f:0.60},
+];
+const FESTIVALS = [
+  {name:"周末人潮", icon:"🎉", f:1.45},
+  {name:"社区活动", icon:"🎪", f:1.35},
+  {name:"节日促销季", icon:"🎊", f:1.55},
+];
+
+/* ---------- 存档（最佳成绩） ---------- */
+const BEST_KEY="bgs_best";
+function loadBest(){ try{return JSON.parse(localStorage.getItem(BEST_KEY))||{val:0,day:0};}catch(e){return {val:0,day:0};} }
+function saveBest(b){ try{localStorage.setItem(BEST_KEY,JSON.stringify(b));}catch(e){} }
+
+/* ---------- 游戏状态 ---------- */
+let S, todayEvent, over;
+
+function newGame(){
+  S = {
+    day:1, cash:START.cash, brand:START.brand, satis:START.satis,
+    invent:START.invent, equip:START.equip, staff:START.staff,
+    ingCost:5, ledger:[], profitSum:0, profitDays:0
+  };
+  over=false;
+  rollEvent();
+  // 合理的默认进货建议：预估客流
+  const est=estimateDemand(START.price,0);
+  $("#buy").value = Math.min(200, Math.round(est/5)*5);
+  $("#price").value = START.price;
+  $("#ad").value = 0;
+  renderAll();
+}
+
+/* 每天开门前生成情报：天气 + 原料价 */
+function rollEvent(){
+  // 10% 概率有节日/活动，否则普通天气
+  const isFest = Math.random()<0.18;
+  const w = isFest ? pick(FESTIVALS) : pick(WEATHERS);
+  S.ingCost = Math.round(clamp(5+rnd(-1.5,2.2),3,8));
+  todayEvent = { ...w, fest:isFest };
+}
+
+/* ---------- 客流模型 ---------- */
+function refPrice(){ return 10 + (S.equip-1)*1.5 + (S.satis-70)*0.05; }
+function capacity(){ return BASE_CAP + (S.equip-1)*CAP_PER_EQUIP + S.staff*CAP_PER_STAFF; }
+
+function estimateDemand(price, ad){
+  const base = 30 + S.brand*1.2;
+  const priceFactor = clamp(1.9 - price/refPrice(), 0.12, 1.6);
+  const satisFactor = 0.6 + S.satis/125;
+  const adFactor = 1 + Math.sqrt(ad)/25;
+  const evFactor = todayEvent ? todayEvent.f : 1;
+  return Math.max(0, Math.round(base*priceFactor*satisFactor*adFactor*evFactor));
+}
+
+/* ---------- 估值 ---------- */
+function valuation(){
+  const avgProfit = S.profitDays? S.profitSum/S.profitDays : 0;
+  return Math.max(0, Math.round(Math.max(0,S.cash) + S.brand*100 + Math.max(0,avgProfit)*30));
+}
+
+/* ============================================================
+   核心：结算一天
+   ============================================================ */
+function runDay(){
+  const price=+$("#price").value, buy=+$("#buy").value, ad=+$("#ad").value;
+  const buyCost = buy*S.ingCost;
+  const spend = buyCost + ad;
+  if(spend > S.cash){ toast("现金不够支付进货 + 广告 😵"); return; }
+
+  // 采购与投入先扣现金
+  S.cash -= buyCost;
+  S.invent += buy;
+
+  const demand = estimateDemand(price, ad);
+  const cap = capacity();
+  const servable = Math.min(demand, cap);           // 产能能接待的人数
+  const sales = Math.min(servable, S.invent);       // 再受库存限制
+  const lostCap = Math.max(0, demand-cap);          // 产能不足流失
+  const lostStock = Math.max(0, servable-S.invent); // 售罄流失
+
+  const revenue = sales*price;
+  const cogs = sales*S.ingCost;
+  const wages = S.staff*WAGE;
+  const rent = RENT;
+  // 广告已计入 spend，但现金在这里统一结算：先把广告扣掉
+  S.cash -= ad;
+
+  // 隔夜库存损耗
+  let leftover = S.invent - sales;
+  const spoil = Math.round(leftover*SPOIL_RATE);
+  const spoilCost = spoil*S.ingCost;
+  S.invent = leftover - spoil;
+
+  const profit = revenue - cogs - wages - rent - ad - spoilCost;
+  S.cash += revenue - wages - rent;   // COGS 已在进货时付；损耗是沉没库存不再退钱
+
+  // 满意度：满足率 + 价格公平
+  const fulfill = demand>0 ? sales/demand : 1;
+  let satDelta = (fulfill-0.85)*22;
+  const fair = (refPrice()*1.25 - price)/refPrice()*6;
+  satDelta += fair;
+  satDelta = clamp(satDelta,-14,10);
+  const satBefore=S.satis;
+  S.satis = clamp(S.satis + satDelta*0.6, 0, 100);
+
+  // 品牌：广告 + 满意度 - 自然衰减
+  const brandBefore=S.brand;
+  let brandDelta = Math.sqrt(ad)/14 + (S.satis-70)*0.03 - 0.5;
+  S.brand = clamp(S.brand + brandDelta, 0, 100);
+
+  // 记账
+  S.profitSum += profit; S.profitDays++;
+  S.ledger.push({ day:S.day, sales, revenue, cost:cogs+wages+rent+ad+spoilCost, profit, cash:S.cash });
+
+  const result = {
+    price, ad, demand, cap, sales, lostCap, lostStock,
+    revenue, cogs, wages, rent, spoil, spoilCost, profit,
+    satDelta:S.satis-satBefore, brandDelta:S.brand-brandBefore,
+    invent:S.invent
+  };
+
+  // 判定
+  if(S.cash < 0){ over="bust"; }
+  else if(valuation() >= WIN_VAL){ over="win"; }
+  else if(S.day >= MAX_DAY){ over="end"; }
+
+  showDayResult(result);
+
+  if(!over){
+    S.day++;
+    rollEvent();
+    // 帮玩家把进货默认成预估客流，减少重复操作
+    const est=estimateDemand(price,0);
+    $("#buy").value = clamp(Math.round(est/5)*5,0,200);
+    $("#ad").value = ad;
+  }
+  renderAll();
+}
+
+/* ============================================================
+   渲染
+   ============================================================ */
+function renderAll(){
+  renderPills(); renderIntel(); renderControls(); renderUpgrades(); renderStatus(); renderLedger();
+  $("#day-title").textContent = `第 ${S.day} 天 · 今日情报`;
+}
+
+function renderPills(){
+  const v=valuation();
+  $("#pills").innerHTML = `
+    <span class="pill"><span class="lbl">📅 天数</span><b>${S.day}/${MAX_DAY}</b></span>
+    <span class="pill money"><span class="lbl">💰 现金</span><b>${yuan(S.cash)}</b></span>
+    <span class="pill"><span class="lbl">📦 库存</span><b>${S.invent}</b></span>
+    <span class="pill brand"><span class="lbl">⭐ 品牌</span><b>${S.brand.toFixed(0)}</b></span>
+    <span class="pill"><span class="lbl">😊 满意度</span><b>${S.satis.toFixed(0)}</b></span>
+    <span class="pill val"><span class="lbl">🏦 估值</span><b>${yuan(v)}</b></span>`;
+}
+
+function renderIntel(){
+  const e=todayEvent;
+  const trend = e.fest ? '<span style="color:var(--good)">客流大增</span>'
+    : e.f>=1.05 ? '<span style="color:var(--good)">客流偏旺</span>'
+    : e.f<0.9 ? '<span style="color:var(--bad)">客流偏淡</span>' : '客流一般';
+  const cheap = S.ingCost<=4, dear = S.ingCost>=7;
+  $("#intel").innerHTML = `
+    <div class="intel-item"><div class="k">今日天气/事件</div><div class="v">${e.icon} ${e.name}</div><div class="tiny" style="margin-top:4px">${trend}（×${e.f.toFixed(2)}）</div></div>
+    <div class="intel-item"><div class="k">原料成本 / 份</div><div class="v">${yuan(S.ingCost)}</div><div class="tiny" style="margin-top:4px">${cheap?'<span style="color:var(--good)">今日便宜，可多备</span>':dear?'<span style="color:var(--bad)">今日偏贵，谨慎</span>':'价格正常'}</div></div>
+    <div class="intel-item"><div class="k">产能上限 / 天</div><div class="v">👥 ${capacity()} 份</div><div class="tiny" style="margin-top:4px">设备 Lv.${S.equip} · 员工 ${S.staff}</div></div>`;
+}
+
+function renderControls(){
+  const price=+$("#price").value, buy=+$("#buy").value, ad=+$("#ad").value;
+  $("#price-val").textContent = yuan(price);
+  $("#buy-val").textContent = buy+" 份";
+  $("#ad-val").textContent = yuan(ad);
+
+  const est = estimateDemand(price, ad);
+  const grossEach = price - S.ingCost;
+  $("#price-note").innerHTML = `预估客流 <b>${est}</b> 人 · 单份毛利 <b>${yuan(grossEach)}</b>（原料 ${yuan(S.ingCost)}）`;
+
+  const buyCost=buy*S.ingCost;
+  const after=S.invent+buy;
+  $("#buy-note").innerHTML = `花费 <b>${yuan(buyCost)}</b> · 备货后库存 <b>${after}</b> 份 · 现金余 <b>${yuan(S.cash-buyCost-ad)}</b>`;
+
+  const adEst = estimateDemand(price,0);
+  $("#ad-note").innerHTML = ad>0
+    ? `广告使客流 <b>${adEst} → ${est}</b>（+${est-adEst}），并积累品牌`
+    : `暂不投放广告`;
+
+  // 库存/现金约束下的按钮禁用
+  const maxAfford = Math.floor((S.cash-ad)/Math.max(1,S.ingCost));
+  $("#buy").max = Math.max(0, Math.min(400, Math.max(maxAfford, buy)));
+  $("#btn-open").disabled = (buyCost+ad>S.cash);
+}
+
+function renderUpgrades(){
+  const equipCost = Math.round(600*Math.pow(1.7,S.equip-1));
+  const hireInfo = `日薪 ${yuan(WAGE)} · 产能 +${CAP_PER_STAFF}/天`;
+  $("#upgrades").innerHTML = `
+    <div class="upg">
+      <span class="ico">🔧</span>
+      <div class="info"><b>升级设备 → Lv.${S.equip+1}</b><div>产能 +${CAP_PER_EQUIP}/天 · 提升性价比感知</div></div>
+      <button class="btn sm ${S.cash<equipCost?'ghost':''}" id="btn-equip" ${S.cash<equipCost?'disabled':''}>${yuan(equipCost)}</button>
+    </div>
+    <div class="upg">
+      <span class="ico">🧑‍🍳</span>
+      <div class="info"><b>雇佣员工（当前 ${S.staff} 人）</b><div>${hireInfo}</div></div>
+      <button class="btn sm ghost" id="btn-hire">+1 名</button>
+    </div>
+    ${S.staff>0?`<div class="upg"><span class="ico">🚪</span><div class="info"><b>辞退员工</b><div>省下日薪，但降低产能</div></div><button class="btn sm ghost" id="btn-fire">-1 名</button></div>`:''}`;
+
+  $("#btn-equip") && ($("#btn-equip").onclick=()=>{
+    if(S.cash<equipCost) return;
+    S.cash-=equipCost; S.equip++; toast(`设备升级到 Lv.${S.equip} 🔧`); renderAll();
+  });
+  $("#btn-hire") && ($("#btn-hire").onclick=()=>{ S.staff++; toast(`雇佣了 1 名员工，产能 +${CAP_PER_STAFF} 🧑‍🍳`); renderAll(); });
+  $("#btn-fire") && ($("#btn-fire").onclick=()=>{ if(S.staff>0){S.staff--; toast("辞退 1 名员工"); renderAll();} });
+}
+
+function renderStatus(){
+  const cap=capacity();
+  const avgProfit = S.profitDays? S.profitSum/S.profitDays : 0;
+  const barsHtml = (label,val,color)=>`
+    <div class="pl-row" style="border:none;padding:4px 0 2px"><span>${label}</span><span class="amt">${val.toFixed(0)}/100</span></div>
+    <div class="bar"><i style="width:${val}%;background:${color}"></i></div>`;
+  $("#status-body").innerHTML = `
+    ${barsHtml("😊 顾客满意度", S.satis, "linear-gradient(90deg,var(--warn),var(--good))")}
+    <div style="height:12px"></div>
+    ${barsHtml("⭐ 品牌力", S.brand, "linear-gradient(90deg,var(--accent),var(--accent-2))")}
+    <div class="pl-row mt"><span>🏭 设备等级</span><span class="amt">Lv.${S.equip}</span></div>
+    <div class="pl-row"><span>👥 产能上限</span><span class="amt">${cap} 份/天</span></div>
+    <div class="pl-row"><span>🏠 固定成本/天</span><span class="amt">${yuan(RENT+S.staff*WAGE)}</span></div>
+    <div class="pl-row"><span>📈 日均净利</span><span class="amt ${avgProfit>=0?'pos':'neg'}">${yuan(avgProfit)}</span></div>`;
+}
+
+function renderLedger(){
+  const rows=S.ledger.slice(-10).reverse();
+  const tb=$("#ledger tbody");
+  if(!rows.length){ tb.innerHTML=`<tr><td colspan="6" class="empty">还没有营业记录 —— 完成第一天经营后这里会出现数据面板 📊</td></tr>`; $("#ledger-note").innerHTML=''; return; }
+  tb.innerHTML = rows.map(r=>`<tr>
+    <td>D${r.day}</td><td>${r.sales}</td><td>${yuan(r.revenue)}</td><td>${yuan(r.cost)}</td>
+    <td class="${r.profit>=0?'pos':'neg'}">${r.profit>=0?'+':''}${yuan(r.profit)}</td><td>${yuan(r.cash)}</td></tr>`).join("");
+  const totProfit=S.ledger.reduce((a,r)=>a+r.profit,0);
+  const totSales=S.ledger.reduce((a,r)=>a+r.sales,0);
+  $("#ledger-note").innerHTML = `累计售出 <b>${totSales}</b> 份 · 累计净利 <b class="${totProfit>=0?'pos':'neg'}">${yuan(totProfit)}</b>`;
+}
+
+/* ---------- 结算弹窗 ---------- */
+function showDayResult(r){
+  const line=(label,amt,cls="")=>`<div class="pl-row"><span>${label}</span><span class="amt ${cls}">${amt>=0&&!cls?'':''}${yuan(amt)}</span></div>`;
+  let lost="";
+  if(r.lostStock>0) lost+=`<div class="event-banner">😟 <b>${r.lostStock}</b> 位顾客因<b>售罄</b>离开——备货不足。</div>`;
+  if(r.lostCap>0) lost+=`<div class="event-banner">⏳ <b>${r.lostCap}</b> 位顾客因<b>排队过久/产能不足</b>放弃——考虑升级或雇人。</div>`;
+
+  let head, foot;
+  if(over){
+    const v=valuation(); const best=loadBest();
+    let isBest=false;
+    if(v>best.val || (over==="win"&&best.val<WIN_VAL)){ best.val=Math.max(best.val,v); best.day=Math.max(best.day,S.day); saveBest(best); isBest=true; }
+    else { best.day=Math.max(best.day,S.day); saveBest(best); }
+    const emoji = over==="win"?"🏆": over==="bust"?"💸":"🏁";
+    const title = over==="win"?"经营成功！": over==="bust"?"资金链断裂":"30 天挑战结束";
+    head=`<div class="result-emoji">${emoji}</div><h2>${title}</h2><div class="day-badge">第 ${S.day} 天 · 最终估值</div>
+      <div class="big-num" style="color:var(--blue)">${yuan(v)}</div>
+      ${isBest?'<div class="center" style="margin-top:8px"><span class="chip" style="border-color:var(--accent);color:var(--accent)">🎉 新纪录</span></div>':''}
+      <div class="center tiny mt">历史最佳估值 ${yuan(best.val)} · 最长经营 ${best.day} 天</div>`;
+    foot=`<button class="btn block mt" id="modal-restart">再来一局 🔄</button>`;
+  } else {
+    head=`<h2>第 ${r.price?S.day:S.day} 天 · 营业结算</h2>
+      <div class="day-badge">${todayEventLabelPrev()} · 售出 ${r.sales} / 需求 ${r.demand}</div>`;
+    foot=`<button class="btn block mt" id="modal-continue">继续经营 →</button>`;
+  }
+
+  const profitCls = r.profit>=0?'pos':'neg';
+  const body = over && over!=="end" && over!=="win" ? "" : `
+    ${lost}
+    ${line("🍔 营业收入", r.revenue, "pos")}
+    ${line("— 原料成本", -r.cogs, "neg")}
+    ${r.wages>0?line("— 员工工资", -r.wages, "neg"):""}
+    ${line("— 房租", -r.rent, "neg")}
+    ${r.ad>0?line("— 广告投入", -r.ad, "neg"):""}
+    ${r.spoil>0?line(`— 库存损耗（${r.spoil} 份）`, -r.spoilCost, "neg"):""}
+    <div class="pl-row pl-total"><span>当日净利</span><span class="amt ${profitCls}">${r.profit>=0?'+':''}${yuan(r.profit)}</span></div>
+    <div class="metric-chips">
+      <span class="chip">😊 满意度 <b class="${r.satDelta>=0?'pos':'neg'}">${r.satDelta>=0?'+':''}${r.satDelta.toFixed(1)}</b></span>
+      <span class="chip">⭐ 品牌 <b class="${r.brandDelta>=0?'pos':'neg'}">${r.brandDelta>=0?'+':''}${r.brandDelta.toFixed(1)}</b></span>
+      <span class="chip">📦 剩余库存 <b>${r.invent}</b></span>
+    </div>`;
+
+  const ov=document.createElement("div");
+  ov.className="overlay"; ov.id="overlay";
+  ov.innerHTML=`<div class="modal">${head}${body}${foot}</div>`;
+  document.body.appendChild(ov);
+  const cont=$("#modal-continue"); if(cont) cont.onclick=()=>ov.remove();
+  const rs=$("#modal-restart"); if(rs) rs.onclick=()=>{ ov.remove(); newGame(); };
+  ov.addEventListener("click",(e)=>{ if(e.target===ov && $("#modal-continue")) ov.remove(); });
+}
+let _prevEventLabel="";
+function todayEventLabelPrev(){ return _prevEventLabel; }
+
+/* ---------- 交互绑定 ---------- */
+["price","buy","ad"].forEach(id=>{ $("#"+id).addEventListener("input",renderControls); });
+$("#btn-open").onclick=()=>{ _prevEventLabel=`${todayEvent.icon} ${todayEvent.name}`; runDay(); };
+$("#btn-restart").onclick=()=>{ if(confirm("确定重新开始一局？当前进度会丢失。")) newGame(); };
+
+/* 主题 */
+function applyThemeIcon(){ const t=document.documentElement.getAttribute("data-theme"); $("#btn-theme").textContent = t==="light"?"☀️":"🌙"; const m=$('meta[name=theme-color]'); if(m) m.setAttribute("content", t==="light"?"#eef1f8":"#0f1220"); }
+$("#btn-theme").onclick=()=>{ const cur=document.documentElement.getAttribute("data-theme"); const nxt=cur==="light"?"dark":"light"; document.documentElement.setAttribute("data-theme",nxt); try{localStorage.setItem("bgs_theme",JSON.stringify(nxt));}catch(e){} applyThemeIcon(); };
+applyThemeIcon();
+
+/* Toast */
+let toastTimer;
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove("show"),1800); }
+
+/* 启动 */
+newGame();
+</script>
+</body>
+</html>
