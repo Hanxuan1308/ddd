@@ -605,7 +605,7 @@ $("#btn-open").onclick=()=>{ _prevEventLabel=`${todayEvent.icon} ${todayEvent.na
 $("#btn-restart").onclick=()=>{ if(confirm("确定重新开始一局？当前进度会丢失。")) newGame(); };
 
 /* 主题 */
-function applyThemeIcon(){ const t=document.documentElement.getAttribute("data-theme"); $("#btn-theme").textContent = t==="light"?"☀️":"🌙"; $('meta[name=theme-color]').setAttribute("content", t==="light"?"#eef1f8":"#0f1220"); }
+function applyThemeIcon(){ const t=document.documentElement.getAttribute("data-theme"); $("#btn-theme").textContent = t==="light"?"☀️":"🌙"; const m=$('meta[name=theme-color]'); if(m) m.setAttribute("content", t==="light"?"#eef1f8":"#0f1220"); }
 $("#btn-theme").onclick=()=>{ const cur=document.documentElement.getAttribute("data-theme"); const nxt=cur==="light"?"dark":"light"; document.documentElement.setAttribute("data-theme",nxt); try{localStorage.setItem("bgs_theme",JSON.stringify(nxt));}catch(e){} applyThemeIcon(); };
 applyThemeIcon();
 
