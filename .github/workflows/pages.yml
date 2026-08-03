@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: ["claude/reasoning-game-9rq630"]
+    branches: ["claude/reasoning-game-9rq630", "claude/new-session-442zko"]
   workflow_dispatch:
 
 permissions:
