@@ -71,10 +71,11 @@ body{
 .pill.money b{color:var(--good)} .pill.brand b{color:var(--accent)} .pill.val b{color:var(--blue)}
 .pill .lbl{opacity:.85}
 
-.panel{background:linear-gradient(160deg,var(--panel) 0%,var(--bg-soft) 100%);border:1px solid var(--line);border-radius:var(--radius);padding:clamp(16px,3vw,24px);margin-bottom:18px}
+.panel{background:linear-gradient(160deg,var(--panel) 0%,var(--bg-soft) 100%);border:1px solid var(--line);border-radius:var(--radius);padding:clamp(16px,3vw,24px);margin-bottom:18px;min-width:0}
 .panel h3{margin:0 0 14px;font-size:17px;display:flex;align-items:center;gap:8px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
-@media(max-width:760px){.grid2{grid-template-columns:1fr}}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+.grid2>div{min-width:0}
+@media(max-width:760px){.grid2{grid-template-columns:minmax(0,1fr)}}
 
 /* 说明折叠 */
 .howto{margin:0 0 18px;border:1px solid var(--line);border-radius:14px;background:var(--bg-soft)}
@@ -128,8 +129,8 @@ body{
 .btn.block{width:100%;padding:15px;font-size:16.5px}
 
 /* 数据表 */
-.table-wrap{overflow-x:auto}
-table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:520px}
+.table-wrap{overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:460px}
 th,td{padding:9px 10px;text-align:right;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;white-space:nowrap}
 th{color:var(--muted);font-weight:600;font-size:12px}
 th:first-child,td:first-child{text-align:left}
